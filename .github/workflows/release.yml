@@ -71,13 +71,17 @@ jobs:
         run: |
           current="${{ steps.prev.outputs.current }}"
           previous="${{ steps.prev.outputs.previous }}"
+          repo_url="${{ github.server_url }}/${{ github.repository }}"
           {
             echo "## Changelog"
             echo
             if [ -n "$previous" ]; then
-              echo "Changes since [\`$previous\`](../../compare/$previous...$current):"
+              echo "Changes since \`$previous\`:"
               echo
               git log --no-merges --pretty=format:'- %s (%h)' "$previous..$current"
+              echo
+              echo
+              echo "**Full Changelog**: $repo_url/compare/$previous...$current"
             else
               echo "Initial release. All commits included:"
               echo
