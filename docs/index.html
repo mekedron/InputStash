@@ -658,6 +658,30 @@
     color: var(--accent);
     display: inline-flex; align-items: center; gap: 4px;
   }
+  .browser-card.disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+  .browser-card.disabled:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: var(--border-card);
+  }
+  .browser-card .arrow.muted { color: var(--fg-muted); }
+  .soon-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--brand-warm);
+    background: var(--surface-inset);
+    border: 1px solid var(--border-soft);
+    border-radius: 999px;
+    vertical-align: middle;
+  }
 
   /* ===== Open source / Support ===== */
   .support {
@@ -1048,7 +1072,7 @@
     </div>
     <div class="browser-grid">
 
-      <a class="browser-card" href="https://chromewebstore.google.com/" target="_blank" rel="noopener">
+      <a class="browser-card" href="https://chromewebstore.google.com/detail/njofgcbjfefgocdngdmlegcdigcbjneh" target="_blank" rel="noopener">
         <div class="logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
         </div>
@@ -1057,39 +1081,39 @@
         <div class="arrow">Add to Chrome →</div>
       </a>
 
-      <a class="browser-card" href="https://addons.mozilla.org/" target="_blank" rel="noopener">
+      <span class="browser-card disabled" aria-disabled="true">
         <div class="logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M7 14c1 2 3 3 5 3 4 0 6-3 6-6 0-2-1-4-3-4-1 0-2 .5-2 2 0-2-2-3-3-3-3 0-5 3-5 6 0 1 .5 2 2 2z"/></svg>
         </div>
-        <div class="name">Firefox</div>
+        <div class="name">Firefox <span class="soon-badge">Soon</span></div>
         <div class="meta">addons.mozilla.org</div>
-        <div class="arrow">Add to Firefox →</div>
-      </a>
+        <div class="arrow muted">In review</div>
+      </span>
 
-      <a class="browser-card" href="https://microsoftedge.microsoft.com/addons" target="_blank" rel="noopener">
+      <a class="browser-card" href="https://chromewebstore.google.com/detail/njofgcbjfefgocdngdmlegcdigcbjneh" target="_blank" rel="noopener">
         <div class="logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4 13c2-4 6-6 10-5 3 1 5 3 5 6"/><path d="M8 17c2 1 5 1 7 0"/></svg>
         </div>
         <div class="name">Edge</div>
-        <div class="meta">Edge Add-ons</div>
+        <div class="meta">Chrome Web Store</div>
         <div class="arrow">Add to Edge →</div>
       </a>
 
-      <a class="browser-card" href="https://chromewebstore.google.com/" target="_blank" rel="noopener">
+      <a class="browser-card" href="https://chromewebstore.google.com/detail/njofgcbjfefgocdngdmlegcdigcbjneh" target="_blank" rel="noopener">
         <div class="logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v8c0 4.5 3.5 8 8 8s8-3.5 8-8V6l-8-4z"/><circle cx="12" cy="12" r="3"/></svg>
         </div>
         <div class="name">Brave</div>
-        <div class="meta">Uses Chrome Store</div>
+        <div class="meta">Chrome Web Store</div>
         <div class="arrow">Install for Brave →</div>
       </a>
 
-      <a class="browser-card" href="https://addons.opera.com/" target="_blank" rel="noopener">
+      <a class="browser-card" href="https://chromewebstore.google.com/detail/njofgcbjfefgocdngdmlegcdigcbjneh" target="_blank" rel="noopener">
         <div class="logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="10" ry="10"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
         </div>
         <div class="name">Opera</div>
-        <div class="meta">addons.opera.com</div>
+        <div class="meta">Chrome Web Store</div>
         <div class="arrow">Install for Opera →</div>
       </a>
 

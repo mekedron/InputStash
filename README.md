@@ -8,6 +8,12 @@ Never lose what you typed.
 
 A cross-browser extension that quietly remembers what you've typed into form fields, so an accidental `Esc`, a rogue keyboard shortcut, a refresh, or a tab close never destroys your draft again. Open the toolbar icon, find the input you lost, copy it back.
 
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/njofgcbjfefgocdngdmlegcdigcbjneh">
+    <img src="docs/images/chrome-web-store-badge.png" alt="Available in the Chrome Web Store" height="58" />
+  </a>
+</p>
+
 > Built and maintained by one indie developer. If it saves you a painful retype, [☕ buy me a coffee](https://buymeacoffee.com/mekedron) — it keeps InputStash free and ad-free.
 
 <p align="center">
