@@ -75,11 +75,12 @@
   }
 
   /* Theme-conditional images: show the light asset by default, swap to the
-     dark asset when the dark theme is active. `img` qualifier wins specificity
-     against later `.popup-image` / `.popup-shot` rules that set display:block. */
-  img.theme-dark-only { display: none; }
-  :root[data-theme="dark"] img.theme-light-only { display: none; }
-  :root[data-theme="dark"] img.theme-dark-only { display: block; }
+     dark asset when the dark theme is active. `!important` is intentional —
+     these utilities must beat per-component display rules (e.g. `.popup-image`,
+     `.demo .popup-shot`) regardless of their specificity or source order. */
+  .theme-dark-only { display: none !important; }
+  :root[data-theme="dark"] .theme-light-only { display: none !important; }
+  :root[data-theme="dark"] .theme-dark-only { display: block !important; }
 
   :root[data-theme="dark"] {
     color-scheme: dark;
