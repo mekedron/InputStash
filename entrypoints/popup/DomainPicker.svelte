@@ -85,9 +85,8 @@
   </div>
 
   {#if currentDomain}
-    <button class="current" type="button" onclick={() => select(currentDomain)}>
+    <button class="current" type="button" aria-label="Current domain" title="Current domain" onclick={() => select(currentDomain)}>
       <RotateCcw size={14} aria-hidden="true" />
-      <span>Current</span>
     </button>
   {/if}
 </section>
@@ -194,20 +193,14 @@
   }
 
   .current {
-    width: 78px;
-  }
-
-  .current {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    min-height: 30px;
-    padding: 6px 10px;
-    overflow: hidden;
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    padding: 0;
     color: #191b1c;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     background: #fffdf7;
     border: 1px solid rgba(25, 27, 28, 0.14);
     border-radius: 8px;

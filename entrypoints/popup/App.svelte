@@ -48,10 +48,8 @@
   $: selectedSummary = domains.find((domain) => domain.domain === selectedDomain);
   $: selectedDomainBlocked = settings.blockedDomains.includes(selectedDomain);
   $: blockedFields = settings.blockedFields[selectedDomain] || [];
-  $: allowedFields = settings.allowedFields[selectedDomain] || [];
   $: blockedDomainCount = settings.blockedDomains.length;
   $: blockedFieldCount = Object.values(settings.blockedFields).reduce((count, fieldKeys) => count + fieldKeys.length, 0);
-  $: allowedFieldCount = Object.values(settings.allowedFields).reduce((count, fieldKeys) => count + fieldKeys.length, 0);
 
   onMount(() => {
     void initialize();
@@ -143,25 +141,10 @@
     const blocked = new Set(settings.blockedFields[selectedDomain] || []);
     if (blocked.has(fieldKey)) blocked.delete(fieldKey);
     else blocked.add(fieldKey);
-    settings = await saveSettings({
-      blockedFields: {
-        ...settings.blockedFields,
-        [selectedDomain]: [...blocked].sort(),
-      },
-    });
-  }
-
-  async function toggleFieldAllow(fieldKey: string): Promise<void> {
-    if (!selectedDomain) return;
-    const allowed = new Set(settings.allowedFields[selectedDomain] || []);
-    if (allowed.has(fieldKey)) allowed.delete(fieldKey);
-    else allowed.add(fieldKey);
-    settings = await saveSettings({
-      allowedFields: {
-        ...settings.allowedFields,
-        [selectedDomain]: [...allowed].sort(),
-      },
-    });
+    const nextBlockedFields = { ...settings.blockedFields };
+    if (blocked.size) nextBlockedFields[selectedDomain] = [...blocked].sort();
+    else delete nextBlockedFields[selectedDomain];
+    settings = await saveSettings({ blockedFields: nextBlockedFields });
   }
 
   async function addBlockedDomain(): Promise<void> {
@@ -177,15 +160,14 @@
     settings = await saveSettings({ blockedDomains: settings.blockedDomains.filter((item) => item !== domain) });
   }
 
-  async function removeListField(kind: 'allowed' | 'blocked', domain: string, fieldKey: string): Promise<void> {
-    const source = kind === 'allowed' ? settings.allowedFields : settings.blockedFields;
+  async function removeBlockedField(domain: string, fieldKey: string): Promise<void> {
     const next = {
-      ...source,
-      [domain]: (source[domain] || []).filter((item) => item !== fieldKey),
+      ...settings.blockedFields,
+      [domain]: (settings.blockedFields[domain] || []).filter((item) => item !== fieldKey),
     };
     if (!next[domain].length) delete next[domain];
 
-    settings = await saveSettings(kind === 'allowed' ? { allowedFields: next } : { blockedFields: next });
+    settings = await saveSettings({ blockedFields: next });
   }
 
   async function clearSelectedDomain(): Promise<void> {
@@ -217,14 +199,6 @@
     }, 1200);
   }
 
-  function fieldIsBlocked(fieldKey: string): boolean {
-    return blockedFields.includes(fieldKey);
-  }
-
-  function fieldIsAllowed(fieldKey: string): boolean {
-    return allowedFields.includes(fieldKey);
-  }
-
   function toggleField(fieldKey: string): void {
     expandedFieldKey = expandedFieldKey === fieldKey ? '' : fieldKey;
   }
@@ -241,14 +215,12 @@
       </span>
     </button>
     {#if view === 'settings'}
-      <button class="mini-action text" type="button" onclick={() => (view = 'domain')}>
+      <button class="mini-action" type="button" aria-label="History" title="History" onclick={() => (view = 'domain')}>
         <History size={14} aria-hidden="true" />
-        <span>History</span>
       </button>
     {:else}
-      <button class="mini-action text" type="button" onclick={() => (view = 'settings')}>
+      <button class="mini-action" type="button" aria-label="Settings" title="Settings" onclick={() => (view = 'settings')}>
         <Settings size={14} aria-hidden="true" />
-        <span>Settings</span>
       </button>
     {/if}
   </header>
@@ -262,7 +234,7 @@
     <section class="panel settings-panel">
       <div class="section-title">
         <h2>Settings</h2>
-        <span>{blockedDomainCount} blocked domains · {allowedFieldCount + blockedFieldCount} input rules</span>
+        <span>{blockedDomainCount} blocked domains · {blockedFieldCount} blocked inputs</span>
       </div>
 
       <label class="setting-row">
@@ -291,9 +263,8 @@
         <h3>Blocked domains</h3>
         <div class="inline-form">
           <input placeholder="example.com" bind:value={blockedDomainInput} />
-          <button type="button" onclick={addBlockedDomain}>
+          <button class="icon-only" type="button" aria-label="Block domain" title="Block domain" onclick={addBlockedDomain}>
             <Ban size={15} aria-hidden="true" />
-            <span>Block</span>
           </button>
         </div>
         {#if settings.blockedDomains.length}
@@ -311,29 +282,6 @@
       </div>
 
       <div class="list-manager">
-        <h3>Allowed inputs</h3>
-        {#if listFields(settings.allowedFields).length}
-          {#each listFields(settings.allowedFields) as item}
-            <span class="rule-chip wide">
-              <button type="button" onclick={() => selectDomain(item.domain)}>{item.domain}</button>
-              <code>{item.fieldKey}</code>
-              <button
-                class="danger icon-only"
-                type="button"
-                aria-label={`Remove allowed input rule for ${item.domain}`}
-                title="Remove"
-                onclick={() => removeListField('allowed', item.domain, item.fieldKey)}
-              >
-                <Trash2 size={15} aria-hidden="true" />
-              </button>
-            </span>
-          {/each}
-        {:else}
-          <p>No allowed inputs.</p>
-        {/if}
-      </div>
-
-      <div class="list-manager">
         <h3>Blocked inputs</h3>
         {#if listFields(settings.blockedFields).length}
           {#each listFields(settings.blockedFields) as item}
@@ -345,7 +293,7 @@
                 type="button"
                 aria-label={`Remove blocked input rule for ${item.domain}`}
                 title="Remove"
-                onclick={() => removeListField('blocked', item.domain, item.fieldKey)}
+                onclick={() => removeBlockedField(item.domain, item.fieldKey)}
               >
                 <Trash2 size={15} aria-hidden="true" />
               </button>
@@ -357,9 +305,8 @@
       </div>
 
       <div class="settings-reset">
-        <button class="danger" type="button" onclick={resetSettingsToDefaults}>
+        <button class="danger icon-only" type="button" aria-label="Reset defaults" title="Reset defaults" onclick={resetSettingsToDefaults}>
           <RotateCcw size={15} aria-hidden="true" />
-          <span>Reset defaults</span>
         </button>
         <small>Saved history stays in place.</small>
       </div>
@@ -445,9 +392,8 @@
                 <button class="field-summary" type="button" onclick={() => toggleField(field.fieldKey)}>
                   <span>
                     <strong>{bestFieldName(field)}</strong>
-                    <small>{field.inputType} · {formatTime(field.lastUpdated)}</small>
+                    <small>{records.length} {records.length === 1 ? 'record' : 'records'} · {field.inputType} · {formatTime(field.lastUpdated)}</small>
                   </span>
-                  <em>{records.length}</em>
                 </button>
                 {#if latest}
                   <button class="quick-copy" type="button" aria-label="Copy latest value" title="Copy latest value" onclick={() => copyValue(latest)}>
@@ -476,24 +422,11 @@
                     <button
                       class="icon-only"
                       type="button"
-                      aria-label={fieldIsAllowed(field.fieldKey) ? 'Remove allowed field rule' : 'Allow field'}
-                      title={fieldIsAllowed(field.fieldKey) ? 'Remove allowed field rule' : 'Allow field'}
-                      onclick={() => toggleFieldAllow(field.fieldKey)}
-                    >
-                      {#if fieldIsAllowed(field.fieldKey)}
-                        <X size={15} aria-hidden="true" />
-                      {:else}
-                        <ShieldCheck size={15} aria-hidden="true" />
-                      {/if}
-                    </button>
-                    <button
-                      class="icon-only"
-                      type="button"
-                      aria-label={fieldIsBlocked(field.fieldKey) ? 'Unblock field' : 'Block field'}
-                      title={fieldIsBlocked(field.fieldKey) ? 'Unblock field' : 'Block field'}
+                      aria-label={blockedFields.includes(field.fieldKey) ? 'Unblock field' : 'Block field'}
+                      title={blockedFields.includes(field.fieldKey) ? 'Unblock field' : 'Block field'}
                       onclick={() => toggleFieldBlock(field.fieldKey)}
                     >
-                      {#if fieldIsBlocked(field.fieldKey)}
+                      {#if blockedFields.includes(field.fieldKey)}
                         <ShieldCheck size={15} aria-hidden="true" />
                       {:else}
                         <Ban size={15} aria-hidden="true" />

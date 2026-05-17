@@ -20,8 +20,6 @@ export const DEFAULT_SETTINGS: InputStashSettings = {
   identityThreshold: DEFAULT_IDENTITY_THRESHOLD,
   blockedDomains: [],
   blockedFields: {},
-  allowedDomains: [],
-  allowedFields: {},
 };
 
 const EMPTY_STATE: StashState = { domains: {} };
@@ -204,10 +202,6 @@ export function isFieldBlocked(
   return (settings.blockedFields[normalizeDomain(domain)] || []).includes(fieldKey);
 }
 
-export function isFieldAllowed(domain: string, fieldKey: string, settings: InputStashSettings): boolean {
-  return (settings.allowedFields[normalizeDomain(domain)] || []).includes(fieldKey);
-}
-
 export function normalizeDomain(domain: string | undefined): string {
   if (!domain) return '';
   const value = domain.trim().toLowerCase();
@@ -245,14 +239,9 @@ function normalizeSettings(raw: unknown): InputStashSettings {
   const historyLimit = Number(settings?.historyLimit ?? DEFAULT_HISTORY_LIMIT);
   const identityThreshold = Number(settings?.identityThreshold ?? DEFAULT_IDENTITY_THRESHOLD);
   const blockedFields: Record<string, string[]> = {};
-  const allowedFields: Record<string, string[]> = {};
 
   for (const [domain, fields] of Object.entries(settings?.blockedFields || {})) {
     blockedFields[normalizeDomain(domain)] = Array.isArray(fields) ? [...new Set(fields)] : [];
-  }
-
-  for (const [domain, fields] of Object.entries(settings?.allowedFields || {})) {
-    allowedFields[normalizeDomain(domain)] = Array.isArray(fields) ? [...new Set(fields)] : [];
   }
 
   return {
@@ -262,9 +251,7 @@ function normalizeSettings(raw: unknown): InputStashSettings {
         ? Math.min(100, Math.floor(identityThreshold))
         : DEFAULT_IDENTITY_THRESHOLD,
     blockedDomains: [...new Set((settings?.blockedDomains || []).map(normalizeDomain).filter(Boolean))].sort(),
-    allowedDomains: [...new Set((settings?.allowedDomains || []).map(normalizeDomain).filter(Boolean))].sort(),
     blockedFields,
-    allowedFields,
   };
 }
 

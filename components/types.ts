@@ -5,8 +5,6 @@ export interface InputStashSettings {
   identityThreshold: number;
   blockedDomains: string[];
   blockedFields: Record<string, string[]>;
-  allowedDomains: string[];
-  allowedFields: Record<string, string[]>;
 }
 
 export interface CaptureSnapshot {

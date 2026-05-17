@@ -300,17 +300,6 @@ h3 {
   white-space: nowrap;
 }
 
-.field-summary em {
-  min-width: 28px;
-  padding: 2px 7px;
-  color: #fffdf7;
-  background: #2f7f6d;
-  border-radius: 999px;
-  font-size: 11px;
-  font-style: normal;
-  text-align: center;
-}
-
 .quick-copy {
   flex: 0 0 auto;
   display: inline-grid;

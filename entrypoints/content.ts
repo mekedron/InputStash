@@ -12,8 +12,6 @@ const DEFAULT_SETTINGS: InputStashSettings = {
   identityThreshold: 50,
   blockedDomains: [],
   blockedFields: {},
-  allowedDomains: [],
-  allowedFields: {},
 };
 
 interface ElementSession {
@@ -168,9 +166,7 @@ export default defineContentScript({
       const fieldKey = getFieldKey(target);
       if (isBlockedField(domain, fieldKey, settings)) return undefined;
       if (isHardSensitiveTarget(target)) return undefined;
-      if (isSoftSensitiveTarget(target) && !isAllowedField(domain, fieldKey, settings)) {
-        return undefined;
-      }
+      if (isSoftSensitiveTarget(target)) return undefined;
 
       const label = getElementLabel(target);
       const metadata = getPageMetadata();
@@ -415,8 +411,6 @@ function normalizeSettings(raw: unknown): InputStashSettings {
     identityThreshold: Number(settings?.identityThreshold ?? DEFAULT_SETTINGS.identityThreshold),
     blockedDomains: Array.isArray(settings?.blockedDomains) ? settings.blockedDomains.map(normalizeMetadataDomain) : [],
     blockedFields: settings?.blockedFields || {},
-    allowedDomains: Array.isArray(settings?.allowedDomains) ? settings.allowedDomains.map(normalizeMetadataDomain) : [],
-    allowedFields: settings?.allowedFields || {},
   };
 }
 
@@ -427,10 +421,6 @@ function isBlockedDomain(domain: string, settings: InputStashSettings): boolean 
 
 function isBlockedField(domain: string, fieldKey: string, settings: InputStashSettings): boolean {
   return (settings.blockedFields[normalizeMetadataDomain(domain)] || []).includes(fieldKey);
-}
-
-function isAllowedField(domain: string, fieldKey: string, settings: InputStashSettings): boolean {
-  return (settings.allowedFields[normalizeMetadataDomain(domain)] || []).includes(fieldKey);
 }
 
 function cleanText(value: string | null | undefined): string | undefined {

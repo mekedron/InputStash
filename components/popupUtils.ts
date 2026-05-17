@@ -8,8 +8,6 @@ export function normalizePopupSettings(raw: unknown): InputStashSettings {
     identityThreshold: Number(value?.identityThreshold ?? 50),
     blockedDomains: value?.blockedDomains || [],
     blockedFields: value?.blockedFields || {},
-    allowedDomains: value?.allowedDomains || [],
-    allowedFields: value?.allowedFields || {},
   };
 }
 
