@@ -141,6 +141,26 @@
   .btn-donate:hover { background: #ffd60a; border-color: rgba(25,27,28,.38); transform: translateY(-1px); }
   .btn-donate:active { transform: translateY(0); box-shadow: inset 0 1px 0 rgba(25,27,28,.14); }
 
+  .btn-install {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 14px;
+    color: #fff;
+    background: var(--brand-warm);
+    border: 1px solid rgba(25, 27, 28, 0.22);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: inset 0 -2px 0 rgba(25, 27, 28, 0.18), 0 4px 14px rgba(216, 78, 53, 0.28);
+    transition: transform .08s ease, background-color .12s ease;
+  }
+  .btn-install:hover { background: #c33f29; transform: translateY(-1px); }
+  .btn-install:active { transform: translateY(0); box-shadow: inset 0 1px 0 rgba(25,27,28,.18); }
+  .btn-install svg { width: 16px; height: 16px; }
+
   /* Hamburger toggle — hidden on desktop, shown on mobile */
   .nav-toggle {
     display: none;
@@ -193,7 +213,7 @@
       border-radius: 10px;
     }
     .nav a.link:active { background: var(--bg-chip); }
-    .nav a.gh, .nav a.btn-donate {
+    .nav a.gh, .nav a.btn-donate, .nav a.btn-install {
       justify-content: center;
       padding: 12px 14px;
       height: auto;
@@ -269,18 +289,23 @@
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    padding: 13px 18px;
-    background: var(--fg);
-    color: var(--surface);
-    border: 1px solid var(--fg);
-    border-radius: 11px;
-    font-size: 15px;
-    font-weight: 700;
+    padding: 15px 22px;
+    background: var(--brand-warm);
+    color: #fff;
+    border: 1px solid var(--brand-warm);
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 800;
     text-decoration: none;
-    box-shadow: 0 8px 22px rgba(25,27,28,.18);
-    transition: transform .08s ease;
+    box-shadow: inset 0 -3px 0 rgba(25, 27, 28, 0.18), 0 12px 28px rgba(216, 78, 53, 0.32);
+    transition: transform .08s ease, background-color .12s ease, box-shadow .12s ease;
   }
-  .install-primary:hover { transform: translateY(-1px); }
+  .install-primary:hover {
+    transform: translateY(-1px);
+    background: #c33f29;
+    box-shadow: inset 0 -3px 0 rgba(25, 27, 28, 0.22), 0 14px 32px rgba(216, 78, 53, 0.4);
+  }
+  .install-primary:active { transform: translateY(0); }
   .install-primary svg { width: 18px; height: 18px; }
 
   .install-secondary {
@@ -841,7 +866,10 @@
       <a class="link" href="#features">Features</a>
       <a class="link" href="#how">How it works</a>
       <a class="link" href="#privacy">Privacy</a>
-      <a class="link" href="#install">Install</a>
+      <a class="btn-install" href="#install" aria-label="Install InputStash">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Install
+      </a>
       <a class="gh" href="https://github.com/mekedron/InputStash" target="_blank" rel="noopener" aria-label="GitHub repository">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.44-2.27 1.17-3.07-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.14 1.17.91-.25 1.89-.38 2.86-.38s1.95.13 2.86.38c2.18-1.48 3.14-1.17 3.14-1.17.62 1.57.23 2.73.11 3.02.73.8 1.17 1.82 1.17 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
         GitHub
