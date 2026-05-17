@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chrome
+            script: zip
+          - browser: firefox
+            script: zip:firefox
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and zip extension
+        run: pnpm ${{ matrix.script }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.browser }}
+          path: .output/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve previous tag
+        id: prev
+        run: |
+          current="${GITHUB_REF_NAME}"
+          previous=$(git tag --sort=-v:refname | grep -vFx "$current" | head -n 1 || true)
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+
+      - name: Build changelog
+        id: changelog
+        run: |
+          current="${{ steps.prev.outputs.current }}"
+          previous="${{ steps.prev.outputs.previous }}"
+          {
+            echo "## Changelog"
+            echo
+            if [ -n "$previous" ]; then
+              echo "Changes since [\`$previous\`](../../compare/$previous...$current):"
+              echo
+              git log --no-merges --pretty=format:'- %s (%h)' "$previous..$current"
+            else
+              echo "Initial release. All commits included:"
+              echo
+              git log --no-merges --pretty=format:'- %s (%h)' "$current"
+            fi
+            echo
+          } > CHANGELOG.md
+          cat CHANGELOG.md
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: CHANGELOG.md
+          files: artifacts/*.zip
+          fail_on_unmatched_files: true
