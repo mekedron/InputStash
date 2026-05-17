@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>InputStash — Never lose what you typed</title>
+<meta name="description" content="A free, open-source browser extension that quietly remembers everything you type so an accidental tab close never destroys your draft. Chrome, Firefox, Edge, Brave, Opera." />
+<link rel="icon" type="image/svg+xml" href="icons/inputstash.svg" />
+<link rel="icon" type="image/png" sizes="128x128" href="icons/inputstash-128.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/inputstash-32.png" />
+<style>
+  :root {
+    --bg-page: #f6f7f2;
+    --bg-app-start: #f9faf4;
+    --bg-app-end: #eef3ef;
+    --bg-app-accent: rgba(216, 78, 53, 0.09);
+    --bg-panel: rgba(255, 253, 247, 0.86);
+    --bg-chip: rgba(25, 27, 28, 0.04);
+
+    --surface: #fffdf7;
+    --surface-inset: #f3f5ee;
+
+    --fg: #191b1c;
+    --fg-body: #343838;
+    --fg-muted: #69706f;
+    --fg-danger: #a43122;
+
+    --accent: #2f7f6d;
+    --accent-soft: rgba(47, 127, 109, 0.14);
+
+    --brand-warm: #d84e35;
+    --donate: #ffdd00;
+
+    --border: rgba(25, 27, 28, 0.14);
+    --border-soft: rgba(25, 27, 28, 0.08);
+    --border-panel: rgba(25, 27, 28, 0.11);
+    --border-card: rgba(25, 27, 28, 0.12);
+    --border-divider: rgba(25, 27, 28, 0.09);
+
+    --shadow-card: 0 10px 24px rgba(25, 27, 28, 0.08);
+    --shadow-lift: 0 18px 38px rgba(25, 27, 28, 0.12);
+    --shadow-popup: 0 30px 80px rgba(25, 27, 28, 0.18);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Avenir Next', 'Gill Sans', 'Segoe UI', Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg-page);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.45;
+  }
+
+  a { color: inherit; }
+  h1, h2, h3, p { margin: 0; }
+  h1 { font-size: clamp(40px, 6vw, 76px); line-height: 1.02; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance; }
+  h2 { font-size: clamp(28px, 3.4vw, 44px); line-height: 1.08; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance; }
+  h3 { font-size: 18px; line-height: 1.2; letter-spacing: -0.005em; font-weight: 700; }
+
+  /* ===== Header ===== */
+  header.site {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    backdrop-filter: saturate(140%) blur(14px);
+    background: rgba(246, 247, 242, 0.78);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .site-inner {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+  }
+  .brand-name {
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: -0.01em;
+  }
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .nav a.link {
+    padding: 8px 12px;
+    font-size: 14px;
+    color: var(--fg-body);
+    text-decoration: none;
+    border-radius: 8px;
+  }
+  .nav a.link:hover { background: var(--bg-chip); color: var(--fg); }
+  .nav a.gh {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    color: var(--fg);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .nav a.gh:hover { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent-soft); }
+
+  .btn-donate {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 14px;
+    color: #191b1c;
+    background: var(--donate);
+    border: 1px solid rgba(25, 27, 28, 0.22);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: inset 0 -2px 0 rgba(25, 27, 28, 0.1);
+    transition: transform .08s ease;
+  }
+  .btn-donate:hover { background: #ffd60a; border-color: rgba(25,27,28,.38); transform: translateY(-1px); }
+  .btn-donate:active { transform: translateY(0); box-shadow: inset 0 1px 0 rgba(25,27,28,.14); }
+
+  /* ===== Hero ===== */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(900px 480px at 90% -10%, rgba(216, 78, 53, 0.12), transparent 60%),
+      radial-gradient(900px 480px at -10% 30%, rgba(47, 127, 109, 0.10), transparent 60%),
+      linear-gradient(180deg, var(--bg-app-start) 0%, var(--bg-app-end) 100%);
+  }
+  .hero-inner {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 72px 24px 64px;
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 56px;
+    align-items: center;
+  }
+  @media (max-width: 960px) {
+    .hero-inner { grid-template-columns: 1fr; gap: 40px; padding: 56px 20px 48px; }
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px 6px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fg-body);
+    margin-bottom: 22px;
+  }
+  .eyebrow .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+  .hero h1 .accent { color: var(--brand-warm); }
+  .hero h1 .underline {
+    background-image: linear-gradient(transparent 64%, rgba(216, 78, 53, 0.22) 64%, rgba(216, 78, 53, 0.22) 92%, transparent 92%);
+  }
+
+  .lede {
+    margin-top: 22px;
+    font-size: clamp(16px, 1.4vw, 19px);
+    color: var(--fg-body);
+    max-width: 56ch;
+    line-height: 1.55;
+  }
+  .lede strong { color: var(--fg); font-weight: 700; }
+
+  .cta-row {
+    margin-top: 30px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .install-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 18px;
+    background: var(--fg);
+    color: var(--surface);
+    border: 1px solid var(--fg);
+    border-radius: 11px;
+    font-size: 15px;
+    font-weight: 700;
+    text-decoration: none;
+    box-shadow: 0 8px 22px rgba(25,27,28,.18);
+    transition: transform .08s ease;
+  }
+  .install-primary:hover { transform: translateY(-1px); }
+  .install-primary svg { width: 18px; height: 18px; }
+
+  .install-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 16px;
+    color: var(--fg);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .install-secondary:hover { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent-soft); }
+
+  .badges {
+    margin-top: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    color: var(--fg-muted);
+    font-size: 13px;
+  }
+  .badges b { color: var(--fg); font-weight: 700; }
+  .badges span { display: inline-flex; align-items: center; gap: 6px; }
+  .badges svg { width: 14px; height: 14px; color: var(--accent); }
+
+  /* hero visual: framed popup screenshot */
+  .hero-visual {
+    position: relative;
+    justify-self: end;
+    width: 100%;
+    max-width: 540px;
+  }
+  .browser-frame {
+    background: var(--surface);
+    border: 1px solid var(--border-panel);
+    border-radius: 18px;
+    box-shadow: var(--shadow-popup);
+    overflow: hidden;
+  }
+  .browser-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-soft);
+    background: rgba(25,27,28,.025);
+  }
+  .traffic { display: flex; gap: 6px; }
+  .traffic i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .traffic .r { background: #ff5f57; }
+  .traffic .y { background: #febc2e; }
+  .traffic .g { background: #28c840; }
+  .url-pill {
+    flex: 1;
+    margin-left: 8px;
+    padding: 5px 12px;
+    background: var(--surface-inset);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    font-size: 11.5px;
+    color: var(--fg-muted);
+    font-family: 'SF Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ext-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--fg);
+  }
+  .ext-pill img { width: 14px; height: 14px; border-radius: 3px; display: block; }
+
+  .popup-wrap {
+    position: relative;
+    padding: 20px 20px 24px;
+    background: linear-gradient(180deg, #fafbf5 0%, #ecf2ee 100%);
+  }
+  .popup-image {
+    width: 100%;
+    display: block;
+    border-radius: 12px;
+    box-shadow: 0 18px 40px rgba(25, 27, 28, 0.14), 0 0 0 1px rgba(25, 27, 28, 0.06);
+  }
+  /* floating callout */
+  .pop-callout {
+    position: absolute;
+    top: 38px;
+    right: -18px;
+    background: var(--fg);
+    color: var(--surface);
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: var(--shadow-lift);
+    transform: rotate(2deg);
+  }
+  .pop-callout::after {
+    content: "";
+    position: absolute;
+    left: -8px;
+    top: 16px;
+    border: 6px solid transparent;
+    border-right-color: var(--fg);
+  }
+  @media (max-width: 960px) {
+    .pop-callout { right: 12px; top: 24px; }
+  }
+
+  /* ===== Section scaffolding ===== */
+  section { padding: 80px 0; }
+  .container {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+  .kicker {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .section-head { max-width: 820px; margin-bottom: 44px; }
+  .section-head p { margin-top: 16px; color: var(--fg-body); font-size: 17px; max-width: 60ch; }
+
+  /* ===== Problem strip ===== */
+  .problem {
+    background: var(--fg);
+    color: var(--surface);
+    padding: 60px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .problem .container {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 40px;
+    align-items: center;
+  }
+  .problem .quote {
+    font-size: clamp(22px, 2.6vw, 32px);
+    line-height: 1.25;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .problem .quote .strike { color: rgba(255, 253, 247, 0.5); text-decoration: line-through; text-decoration-thickness: 2px; }
+  .problem .quote em {
+    font-style: normal;
+    background: var(--brand-warm);
+    padding: 0 6px;
+    border-radius: 4px;
+    color: var(--surface);
+  }
+  .problem .meta {
+    color: rgba(255, 253, 247, 0.7);
+    font-size: 13px;
+    text-align: right;
+  }
+  @media (max-width: 740px) {
+    .problem .container { grid-template-columns: 1fr; }
+    .problem .meta { text-align: left; }
+  }
+
+  /* ===== Features ===== */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 920px) { .feature-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 580px) { .feature-grid { grid-template-columns: 1fr; } }
+  .feature {
+    background: var(--surface);
+    border: 1px solid var(--border-card);
+    border-radius: 14px;
+    padding: 22px;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  .feature:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card);
+    border-color: rgba(25, 27, 28, 0.18);
+  }
+  .feature .icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--surface-inset);
+    border: 1px solid var(--border-soft);
+    display: grid;
+    place-items: center;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .feature .icon svg { width: 20px; height: 20px; }
+  .feature h3 { margin-bottom: 6px; }
+  .feature p { color: var(--fg-muted); font-size: 14.5px; line-height: 1.55; }
+  .feature.warm .icon { color: var(--brand-warm); }
+
+  /* ===== Demo / walkthrough ===== */
+  .demo {
+    background: var(--surface);
+    border-top: 1px solid var(--border-soft);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .demo .container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 56px;
+    align-items: center;
+  }
+  @media (max-width: 920px) { .demo .container { grid-template-columns: 1fr; gap: 36px; } }
+
+  .demo .steps { display: grid; gap: 16px; }
+  .step {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 16px;
+    padding: 14px 16px;
+    background: var(--surface-inset);
+    border: 1px solid var(--border-soft);
+    border-radius: 12px;
+  }
+  .step .num {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    color: var(--surface);
+    background: var(--fg);
+    font-weight: 800;
+    font-size: 14px;
+    border: 1px solid var(--fg);
+  }
+  .step h4 { margin: 4px 0 4px; font-size: 15.5px; font-weight: 700; }
+  .step p { color: var(--fg-muted); font-size: 14px; line-height: 1.5; }
+
+  .demo .visual { position: relative; }
+  .demo .popup-shot {
+    width: 100%;
+    border-radius: 16px;
+    box-shadow: var(--shadow-popup);
+    display: block;
+    background: var(--surface);
+  }
+
+  /* ===== Privacy ===== */
+  .privacy {
+    background:
+      radial-gradient(800px 320px at 20% 0%, rgba(47, 127, 109, 0.11), transparent 60%),
+      linear-gradient(180deg, #f4f7f0 0%, #ecf3ee 100%);
+  }
+  .privacy-card {
+    background: var(--surface);
+    border: 1px solid var(--border-card);
+    border-radius: 18px;
+    padding: 36px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 28px;
+    align-items: center;
+    box-shadow: var(--shadow-card);
+  }
+  .shield {
+    width: 72px; height: 72px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--accent), #21574a);
+    color: var(--surface);
+    display: grid; place-items: center;
+    box-shadow: 0 12px 24px rgba(47, 127, 109, 0.22);
+  }
+  .shield svg { width: 36px; height: 36px; }
+  .privacy-card h3 { font-size: 22px; margin-bottom: 6px; }
+  .privacy-card p { color: var(--fg-body); font-size: 15px; max-width: 64ch; }
+  .privacy-points {
+    display: grid;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--fg-body);
+  }
+  .privacy-points span { display: inline-flex; align-items: center; gap: 8px; }
+  .privacy-points b { color: var(--fg); font-weight: 700; }
+  .privacy-points .tick {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent);
+    display: inline-grid; place-items: center;
+  }
+  .privacy-points .tick svg { width: 12px; height: 12px; }
+  @media (max-width: 880px) {
+    .privacy-card { grid-template-columns: 1fr; text-align: left; }
+    .shield { justify-self: start; }
+  }
+
+  /* ===== Install / browsers ===== */
+  .browsers {
+    background:
+      radial-gradient(800px 320px at 80% 0%, rgba(216, 78, 53, 0.08), transparent 60%),
+      var(--bg-page);
+  }
+  .browser-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 980px) { .browser-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 600px) { .browser-grid { grid-template-columns: repeat(2, 1fr); } }
+  .browser-card {
+    background: var(--surface);
+    border: 1px solid var(--border-card);
+    border-radius: 14px;
+    padding: 20px 18px;
+    text-decoration: none;
+    color: var(--fg);
+    display: grid;
+    gap: 8px;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  .browser-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card);
+    border-color: var(--accent);
+  }
+  .browser-card .logo {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--surface-inset);
+    border: 1px solid var(--border-soft);
+    display: grid; place-items: center;
+    color: var(--fg);
+  }
+  .browser-card .logo svg { width: 24px; height: 24px; }
+  .browser-card .name { font-weight: 700; font-size: 15px; }
+  .browser-card .meta { font-size: 12px; color: var(--fg-muted); }
+  .browser-card .arrow {
+    margin-top: 4px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--accent);
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+
+  /* ===== Open source / Support ===== */
+  .support {
+    background: var(--fg);
+    color: var(--surface);
+    position: relative;
+    overflow: hidden;
+  }
+  .support::before {
+    content: "";
+    position: absolute;
+    inset: -40% -10% auto -10%;
+    height: 80%;
+    background: radial-gradient(50% 50% at 50% 50%, rgba(255, 221, 0, 0.16), transparent 70%);
+    pointer-events: none;
+  }
+  .support .container {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 56px;
+    align-items: center;
+  }
+  @media (max-width: 920px) { .support .container { grid-template-columns: 1fr; } }
+  .support h2 { color: var(--surface); }
+  .support h2 .yellow { color: var(--donate); }
+  .support p { color: rgba(255, 253, 247, 0.78); font-size: 17px; max-width: 56ch; margin-top: 16px; line-height: 1.55; }
+  .support .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+
+  .support-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: var(--donate);
+    color: #191b1c;
+    border: 1px solid var(--donate);
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 10px 24px rgba(255, 221, 0, 0.18);
+    transition: transform .08s ease;
+  }
+  .support-cta:hover { transform: translateY(-1px); background: #ffe44c; }
+
+  .support-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    color: var(--surface);
+    background: rgba(255, 253, 247, 0.06);
+    border: 1px solid rgba(255, 253, 247, 0.18);
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .support-ghost:hover { background: rgba(255, 253, 247, 0.10); }
+
+  .help-list {
+    background: rgba(255, 253, 247, 0.04);
+    border: 1px solid rgba(255, 253, 247, 0.12);
+    border-radius: 16px;
+    padding: 22px;
+    display: grid;
+    gap: 14px;
+  }
+  .help-row {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  .help-row .badge {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: rgba(255, 221, 0, 0.18);
+    color: var(--donate);
+    display: grid; place-items: center;
+  }
+  .help-row .badge svg { width: 16px; height: 16px; }
+  .help-row strong { font-size: 14px; color: var(--surface); font-weight: 700; display: block; margin-bottom: 2px; }
+  .help-row span { font-size: 13px; color: rgba(255, 253, 247, 0.7); line-height: 1.5; }
+
+  /* ===== Footer ===== */
+  footer {
+    background: var(--bg-page);
+    border-top: 1px solid var(--border-soft);
+    padding: 40px 0 56px;
+  }
+  footer .container {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    gap: 28px;
+  }
+  @media (max-width: 760px) { footer .container { grid-template-columns: 1fr 1fr; gap: 28px; } }
+  footer .col h4 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--fg-muted);
+    margin-bottom: 14px;
+    font-weight: 700;
+  }
+  footer .col a {
+    display: block;
+    text-decoration: none;
+    color: var(--fg-body);
+    font-size: 14px;
+    padding: 4px 0;
+  }
+  footer .col a:hover { color: var(--brand-warm); }
+  footer .credits {
+    grid-column: 1 / -1;
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-soft);
+    color: var(--fg-muted);
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  /* utility */
+  .kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    margin: 0 2px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-family: 'SF Mono', ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--fg);
+    box-shadow: inset 0 -1px 0 rgba(25,27,28,.08);
+  }
+</style>
+</head>
+<body>
+
+<!-- ========== HEADER ========== -->
+<header class="site">
+  <div class="site-inner">
+    <a class="brand" href="#top" aria-label="InputStash home">
+      <img class="brand-mark" src="icons/inputstash.svg" alt="" />
+      <span class="brand-name">InputStash</span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a class="link" href="#features">Features</a>
+      <a class="link" href="#how">How it works</a>
+      <a class="link" href="#privacy">Privacy</a>
+      <a class="link" href="#install">Install</a>
+      <a class="gh" href="https://github.com/mekedron/InputStash" target="_blank" rel="noopener" aria-label="GitHub repository">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.44-2.27 1.17-3.07-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.14 1.17.91-.25 1.89-.38 2.86-.38s1.95.13 2.86.38c2.18-1.48 3.14-1.17 3.14-1.17.62 1.57.23 2.73.11 3.02.73.8 1.17 1.82 1.17 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+        GitHub
+      </a>
+      <a class="btn-donate" href="https://buymeacoffee.com/mekedron" target="_blank" rel="noopener" aria-label="Buy me a coffee">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+        Donate
+      </a>
+    </nav>
+  </div>
+</header>
+
+<!-- ========== HERO ========== -->
+<section id="top" class="hero">
+  <div class="hero-inner">
+    <div>
+      <span class="eyebrow"><span class="dot"></span> Free · Open source · No accounts</span>
+      <h1>Never lose <span class="accent">what you typed</span> in a browser tab again.</h1>
+      <p class="lede">
+        InputStash quietly saves <strong>every input</strong> and <strong>textarea</strong> you fill in,
+        on every site. Accidental refresh, runaway shortcut, browser crash, “are you sure you want to leave?” — doesn't matter.
+        Open the toolbar icon, find what you wrote, copy it back.
+      </p>
+      <div class="cta-row">
+        <a class="install-primary" href="#install">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Add to your browser
+        </a>
+        <a class="install-secondary" href="https://github.com/mekedron/InputStash" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.44-2.27 1.17-3.07-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.14 1.17.91-.25 1.89-.38 2.86-.38s1.95.13 2.86.38c2.18-1.48 3.14-1.17 3.14-1.17.62 1.57.23 2.73.11 3.02.73.8 1.17 1.82 1.17 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+          Star on GitHub
+        </a>
+      </div>
+      <div class="badges">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <b>100% local</b> — nothing leaves your device</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <b>MIT licensed</b></span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <b>No analytics, no ads</b></span>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="browser-frame">
+        <div class="browser-bar">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="url-pill">docs.google.com/forms</div>
+          <div class="ext-pill"><img src="icons/inputstash.svg" alt="" /> IS</div>
+        </div>
+        <div class="popup-wrap">
+          <img class="popup-image" src="images/popup-screenshot.png" alt="InputStash popup showing recovered fields from a docs.google.com form" />
+        </div>
+      </div>
+      <div class="pop-callout">Click the toolbar icon — find your draft.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== PROBLEM STRIP ========== -->
+<section class="problem">
+  <div class="container">
+    <div class="quote">
+      <span class="strike">“I just wrote a whole paragraph and</span> the tab crashed.<br/>
+      With InputStash, <em>it's still there.</em>
+    </div>
+    <div class="meta">
+      Drafts. Comments. Bug reports.<br/>
+      Forum posts. Job applications.<br/>
+      Long replies. Search queries.
+    </div>
+  </div>
+</section>
+
+<!-- ========== FEATURES ========== -->
+<section id="features">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">What it does</span>
+      <h2>A safety net for everything you type into a browser.</h2>
+      <p>InputStash runs quietly in the background on every site. It captures regular text inputs, textareas, and rich editors — and groups them by domain so you can find your draft fast.</p>
+    </div>
+    <div class="feature-grid">
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg>
+        </div>
+        <h3>Captures everything</h3>
+        <p>Every <code>&lt;input&gt;</code> and <code>&lt;textarea&gt;</code> across every site, debounced and deduped — including rich editors used by Gmail, Notion, Slack.</p>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3>Time-travels per field</h3>
+        <p>Every change is stamped. Browse the history of a single field and grab the version you actually wanted.</p>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </div>
+        <h3>One-click copy back</h3>
+        <p>Open the popup, find the field, hit copy. Paste into the page. Crisis over in three seconds.</p>
+      </div>
+
+      <div class="feature warm">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>Privacy-first by default</h3>
+        <p>Password fields, OTP codes, credit-card inputs and other sensitive autocomplete tokens are never captured. Per-site opt-out is one click.</p>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 10 15 10"/></svg>
+        </div>
+        <h3>Survives the worst</h3>
+        <p>Crash, force-quit, accidental <span class="kbd">⌘W</span>, “Are you sure you want to leave?”, runaway shortcut — your text stays put.</p>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><path d="M12 3v18"/><circle cx="12" cy="12" r="9"/></svg>
+        </div>
+        <h3>Works on every site</h3>
+        <p>Shadow DOM, iframes, SPAs — the content script walks all of them and re-attaches when new fields mount.</p>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
+        <h3>Tweakable retention</h3>
+        <p>Choose how many versions to keep per field, block specific domains, theme it light/dark/auto.</p>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>Open source</h3>
+        <p>MIT-licensed, audit-friendly TypeScript + Svelte. Read every line that touches your text. Fork it if you want to.</p>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+        </div>
+        <h3>Featherweight</h3>
+        <p>One service worker, one content script, one popup. No bundled framework on your page, no third-party requests.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========== DEMO ========== -->
+<section id="how" class="demo">
+  <div class="container">
+    <div>
+      <span class="kicker">How it works</span>
+      <h2>Three actions. Tops.</h2>
+      <div class="steps" style="margin-top: 28px;">
+        <div class="step">
+          <div class="num">1</div>
+          <div>
+            <h4>Install &amp; pin to toolbar</h4>
+            <p>Add InputStash to your browser, pin the icon next to the address bar so it's always one click away.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <div>
+            <h4>Type normally. Forget it exists.</h4>
+            <p>It captures silently as you go. There's no popup nag, no “draft saved” spinner, no badge counter screaming at you.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <div>
+            <h4>When something goes wrong, open the popup</h4>
+            <p>Current site is on top. Pick the field, hit copy, paste it back into the page. Or browse older versions per field.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="visual">
+      <img class="popup-shot" src="images/popup-screenshot.png" alt="InputStash popup: domain summary at the top, expanded docs.google.com panel showing recovered form fields with their latest values." />
+    </div>
+  </div>
+</section>
+
+<!-- ========== PRIVACY ========== -->
+<section id="privacy" class="privacy">
+  <div class="container">
+    <div class="section-head" style="margin-bottom: 28px;">
+      <span class="kicker">Privacy</span>
+      <h2>It saves everything you type. So it has to be paranoid.</h2>
+      <p>InputStash uses your browser's local storage. Nothing is uploaded, no telemetry pings a server, and there are no accounts. The data is yours, on your machine, full stop.</p>
+    </div>
+
+    <div class="privacy-card">
+      <div class="shield">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+      </div>
+      <div>
+        <h3>Your text never leaves your device.</h3>
+        <p>Stored in <code>browser.storage.local</code>, scoped per-origin, capped, dedupes consecutive snapshots, and ages out the old stuff so it doesn't grow forever.</p>
+      </div>
+      <div class="privacy-points">
+        <span><i class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></i> <b>Skips passwords</b> &amp; OTP fields</span>
+        <span><i class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></i> <b>Per-site opt-out</b> in one click</span>
+        <span><i class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></i> <b>Clear all</b> with one button</span>
+        <span><i class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></i> <b>Zero network</b> requests</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== INSTALL ========== -->
+<section id="install" class="browsers">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">Install</span>
+      <h2>Works in every browser that matters.</h2>
+      <p>Same source, same behaviour. Pick yours.</p>
+    </div>
+    <div class="browser-grid">
+
+      <a class="browser-card" href="https://chromewebstore.google.com/" target="_blank" rel="noopener">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+        </div>
+        <div class="name">Chrome</div>
+        <div class="meta">Chrome Web Store</div>
+        <div class="arrow">Add to Chrome →</div>
+      </a>
+
+      <a class="browser-card" href="https://addons.mozilla.org/" target="_blank" rel="noopener">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M7 14c1 2 3 3 5 3 4 0 6-3 6-6 0-2-1-4-3-4-1 0-2 .5-2 2 0-2-2-3-3-3-3 0-5 3-5 6 0 1 .5 2 2 2z"/></svg>
+        </div>
+        <div class="name">Firefox</div>
+        <div class="meta">addons.mozilla.org</div>
+        <div class="arrow">Add to Firefox →</div>
+      </a>
+
+      <a class="browser-card" href="https://microsoftedge.microsoft.com/addons" target="_blank" rel="noopener">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4 13c2-4 6-6 10-5 3 1 5 3 5 6"/><path d="M8 17c2 1 5 1 7 0"/></svg>
+        </div>
+        <div class="name">Edge</div>
+        <div class="meta">Edge Add-ons</div>
+        <div class="arrow">Add to Edge →</div>
+      </a>
+
+      <a class="browser-card" href="https://chromewebstore.google.com/" target="_blank" rel="noopener">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v8c0 4.5 3.5 8 8 8s8-3.5 8-8V6l-8-4z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div class="name">Brave</div>
+        <div class="meta">Uses Chrome Store</div>
+        <div class="arrow">Install for Brave →</div>
+      </a>
+
+      <a class="browser-card" href="https://addons.opera.com/" target="_blank" rel="noopener">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="10" ry="10"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
+        </div>
+        <div class="name">Opera</div>
+        <div class="meta">addons.opera.com</div>
+        <div class="arrow">Install for Opera →</div>
+      </a>
+
+    </div>
+
+    <p style="margin-top: 24px; color: var(--fg-muted); font-size: 13px;">
+      Listings are pending review on a couple of stores — in the meantime you can <a href="https://github.com/mekedron/InputStash/releases" target="_blank" rel="noopener" style="color: var(--accent); font-weight: 600;">load the unpacked build from GitHub Releases</a> in dev mode.
+    </p>
+  </div>
+</section>
+
+<!-- ========== SUPPORT ========== -->
+<section id="support" class="support">
+  <div class="container">
+    <div>
+      <span class="kicker" style="color: var(--donate);">Support the project</span>
+      <h2>Built by one indie dev. <span class="yellow">Powered by coffee.</span></h2>
+      <p>InputStash has no company behind it, no investors, no ads, no analytics, and no premium tier waiting in the wings. If it saved you a painful retype — or you just want it to keep getting better — chip in the price of a coffee.</p>
+      <div class="row">
+        <a class="support-cta" href="https://buymeacoffee.com/mekedron" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          Buy me a coffee
+        </a>
+        <a class="support-ghost" href="https://github.com/mekedron/InputStash" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.44-2.27 1.17-3.07-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.14 1.17.91-.25 1.89-.38 2.86-.38s1.95.13 2.86.38c2.18-1.48 3.14-1.17 3.14-1.17.62 1.57.23 2.73.11 3.02.73.8 1.17 1.82 1.17 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+          Star on GitHub
+        </a>
+      </div>
+    </div>
+
+    <div class="help-list">
+      <div class="help-row">
+        <div class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+        <div><strong>Star the repo</strong><span>More stars = more people stumble onto it. Costs you nothing.</span></div>
+      </div>
+      <div class="help-row">
+        <div class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+        <div><strong>File a bug or feature request</strong><span>Found a site where it misbehaves? Open an Issue. Patches very welcome.</span></div>
+      </div>
+      <div class="help-row">
+        <div class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+        <div><strong>Tell a friend</strong><span>The friend who's always losing half-written replies. They need this.</span></div>
+      </div>
+      <div class="help-row">
+        <div class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></div>
+        <div><strong>Buy a coffee</strong><span>The single most direct way to keep this free, ad-free, and improving.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== FOOTER ========== -->
+<footer>
+  <div class="container">
+    <div class="col">
+      <a class="brand" href="#top" style="margin-bottom: 14px;">
+        <img class="brand-mark" src="icons/inputstash.svg" alt="" />
+        <span class="brand-name">InputStash</span>
+      </a>
+      <p style="font-size: 14px; color: var(--fg-muted); max-width: 36ch; margin-top: 12px;">
+        A small, free, open-source extension that saves what you type so a tab close never costs you a paragraph again.
+      </p>
+    </div>
+    <div class="col">
+      <h4>Product</h4>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#install">Install</a>
+    </div>
+    <div class="col">
+      <h4>Project</h4>
+      <a href="https://github.com/mekedron/InputStash" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/mekedron/InputStash/issues" target="_blank" rel="noopener">Report a bug</a>
+      <a href="https://github.com/mekedron/InputStash/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="https://github.com/mekedron/InputStash/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    </div>
+    <div class="col">
+      <h4>Support</h4>
+      <a href="https://buymeacoffee.com/mekedron" target="_blank" rel="noopener">Buy me a coffee ☕</a>
+      <a href="#support">Other ways to help</a>
+    </div>
+    <div class="credits">
+      <span>© 2026 InputStash · MIT licensed · Built by one indie dev.</span>
+      <span>Made with care — and a lot of recovered drafts.</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
