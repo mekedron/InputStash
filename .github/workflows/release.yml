@@ -10,6 +10,38 @@ permissions:
   contents: write
 
 jobs:
+  sync-version:
+    name: Sync package.json with tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Update package.json on main if needed
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          current=$(node -p "require('./package.json').version")
+          if [ "$current" = "$version" ]; then
+            echo "package.json on main already at $version"
+            exit 0
+          fi
+          echo "Bumping package.json on main: $current -> $version"
+          node -e '
+            const fs = require("fs");
+            const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            p.version = process.argv[1];
+            fs.writeFileSync("package.json", JSON.stringify(p, null, 2) + "\n");
+          ' "$version"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "Sync package.json version to $tag"
+          git push origin main
+
   build:
     name: Build (${{ matrix.browser }})
     runs-on: ubuntu-latest
@@ -24,6 +56,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Sync package.json to tag version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          current=$(node -p "require('./package.json').version")
+          if [ "$current" != "$version" ]; then
+            echo "Overriding package.json version for build: $current -> $version"
+            node -e '
+              const fs = require("fs");
+              const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
+              p.version = process.argv[1];
+              fs.writeFileSync("package.json", JSON.stringify(p, null, 2) + "\n");
+            ' "$version"
+          else
+            echo "package.json already at $version"
+          fi
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
