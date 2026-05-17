@@ -8,7 +8,7 @@
     mergedMatchesFilter,
     mergedVisibleRecords,
     normalizePopupSettings,
-    preview,
+    previewParts,
   } from '../../components/popupUtils';
   import DomainPicker from './DomainPicker.svelte';
   import {
@@ -47,7 +47,12 @@
   let identityThreshold = 50;
   let blockedDomainInput = '';
   let copyFeedback = '';
+  let expandedValues: Record<string, boolean> = {};
   let settings: InputStashSettings = normalizePopupSettings(undefined);
+
+  function toggleValueExpansion(id: string): void {
+    expandedValues = { ...expandedValues, [id]: !expandedValues[id] };
+  }
 
   $: applyColorScheme(settings.colorScheme);
   $: merged = domainData
@@ -484,7 +489,7 @@
               <div class="field-summary-row">
                 <div class="field-summary">
                   <span class="field-summary-text">
-                    <strong>{m.displayName}</strong>
+                    <strong title={m.displayName}>{m.displayName}</strong>
                     <small>{records.length} {records.length === 1 ? 'record' : 'records'} · {m.inputType} · {formatTime(m.lastUpdated)}</small>
                   </span>
                 </div>
@@ -502,8 +507,10 @@
               </div>
 
               {#if latest}
+                {@const latestParts = previewParts(latest.value)}
+                {@const latestExpanded = !!expandedValues[latest.id]}
                 <section class="field-latest">
-                  <p>{preview(latest.value)}</p>
+                  <p>{latestParts.truncated && !latestExpanded ? latestParts.short : latestParts.full}{#if latestParts.truncated}{' '}<button class="show-more" type="button" onclick={() => toggleValueExpansion(latest.id)}>{latestExpanded ? 'Show less' : 'Show more'}</button>{/if}</p>
                   <div class="field-latest-actions">
                     <button
                       class="icon-only"
@@ -569,12 +576,14 @@
 
                   <div class="records">
                     {#each records as record (record.id)}
+                      {@const recordParts = previewParts(record.value, 260)}
+                      {@const recordExpanded = !!expandedValues[record.id]}
                       <section class="record">
                         <div>
                           <strong>{formatTime(record.updatedAt)}</strong>
                           <span>{record.draft ? 'Live draft' : record.reason}{record.truncated ? ' · truncated' : ''}</span>
                         </div>
-                        <p>{preview(record.value, 260)}</p>
+                        <p>{recordParts.truncated && !recordExpanded ? recordParts.short : recordParts.full}{#if recordParts.truncated}{' '}<button class="show-more" type="button" onclick={() => toggleValueExpansion(record.id)}>{recordExpanded ? 'Show less' : 'Show more'}</button>{/if}</p>
                         <div class="record-actions">
                           <button
                             class="icon-only"

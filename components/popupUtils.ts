@@ -22,10 +22,11 @@ export function formatTime(timestamp: number): string {
   }).format(new Date(timestamp));
 }
 
-export function preview(value: string, max = 140): string {
+export function previewParts(value: string, max = 140): { full: string; short: string; truncated: boolean } {
   const normalized = value.replace(/\s+/g, ' ').trim();
-  if (!normalized) return 'Empty value';
-  return normalized.length > max ? `${normalized.slice(0, max - 1)}...` : normalized;
+  if (!normalized) return { full: 'Empty value', short: 'Empty value', truncated: false };
+  if (normalized.length <= max) return { full: normalized, short: normalized, truncated: false };
+  return { full: normalized, short: `${normalized.slice(0, max - 1)}...`, truncated: true };
 }
 
 export function fieldMatchesFilter(field: FieldHistory, query: string): boolean {
