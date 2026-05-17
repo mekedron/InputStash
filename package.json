@@ -22,5 +22,11 @@
     "svelte-check": "^4.1.0",
     "typescript": "^5.7.0",
     "wxt": "^0.20.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "spawn-sync"
+    ]
   }
 }
