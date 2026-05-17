@@ -525,38 +525,18 @@
     border-radius: 12px;
     box-shadow: var(--shadow-lift), 0 0 0 1px var(--border-soft);
   }
-  /* Hand-drawn arrow that emerges from the popup screenshot, loops up over
-     the browser frame, and lands on the toolbar icon — visually tying the
-     "what you see" (popup) to the "what you click" (extension icon). */
+  /* Short curved arrow pointing down at the toolbar icon. Positioned above
+     the browser frame so it visibly "comes from outside" toward the icon. */
   .hero-arrow {
     position: absolute;
-    top: 6px;
-    right: -54px;
-    width: 188px;
-    height: 170px;
+    top: -42px;
+    right: 18px;
+    width: 32px;
+    height: 50px;
     pointer-events: none;
     color: var(--brand-warm);
     overflow: visible;
     z-index: 2;
-    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.05));
-  }
-  .hero-arrow-path {
-    stroke-dasharray: 600;
-    stroke-dashoffset: 600;
-    animation: heroArrowDraw 1.6s ease-out 0.4s forwards;
-  }
-  @keyframes heroArrowDraw {
-    to { stroke-dashoffset: 0; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .hero-arrow-path {
-      stroke-dasharray: none;
-      stroke-dashoffset: 0;
-      animation: none;
-    }
-  }
-  @media (max-width: 960px) {
-    .hero-arrow { right: -20px; width: 160px; height: 140px; }
   }
 
   /* ===== Section scaffolding ===== */
@@ -1057,7 +1037,7 @@
           <img class="popup-image theme-dark-only" src="images/popup-screenshot-dark.png" alt="InputStash popup showing recovered fields from a docs.google.com form" />
         </div>
       </div>
-      <svg class="hero-arrow" viewBox="0 0 220 200" aria-hidden="true" focusable="false">
+      <svg class="hero-arrow" viewBox="0 0 40 60" aria-hidden="true" focusable="false">
         <defs>
           <marker id="hero-arrowhead" viewBox="0 0 10 10" refX="7" refY="5"
                   markerWidth="5" markerHeight="5" orient="auto-start-reverse">
@@ -1065,7 +1045,7 @@
           </marker>
         </defs>
         <path class="hero-arrow-path"
-              d="M 40 175 C 210 195, 245 40, 195 8 C 165 -6, 140 4, 122 18"
+              d="M 8 4 Q 4 30 20 50"
               fill="none" stroke="currentColor" stroke-width="2.4"
               stroke-linecap="round" marker-end="url(#hero-arrowhead)"/>
       </svg>
