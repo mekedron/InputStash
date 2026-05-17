@@ -1,0 +1,25 @@
+{
+  "name": "inputstash",
+  "description": "Never lose what you typed. Recover recent input from any page.",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "compile": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit",
+    "postinstall": "wxt prepare"
+  },
+  "devDependencies": {
+    "@lucide/svelte": "^1.16.0",
+    "@wxt-dev/module-svelte": "^2.0.5",
+    "svelte": "^5.55.0",
+    "svelte-check": "^4.1.0",
+    "typescript": "^5.7.0",
+    "wxt": "^0.20.0"
+  }
+}
