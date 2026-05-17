@@ -75,10 +75,11 @@
   }
 
   /* Theme-conditional images: show the light asset by default, swap to the
-     dark asset when the dark theme is active. */
-  .theme-dark-only { display: none; }
-  :root[data-theme="dark"] .theme-light-only { display: none; }
-  :root[data-theme="dark"] .theme-dark-only { display: block; }
+     dark asset when the dark theme is active. `img` qualifier wins specificity
+     against later `.popup-image` / `.popup-shot` rules that set display:block. */
+  img.theme-dark-only { display: none; }
+  :root[data-theme="dark"] img.theme-light-only { display: none; }
+  :root[data-theme="dark"] img.theme-dark-only { display: block; }
 
   :root[data-theme="dark"] {
     color-scheme: dark;
