@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronDown, RotateCcw } from '@lucide/svelte';
   import { onMount } from 'svelte';
-  import { domainInitial, formatTime, hideBrokenIcon } from '../../components/popupUtils';
+  import { domainInitial, formatTime } from '../../components/popupUtils';
   import type { DomainSummary } from '../../components/types';
 
   export let currentDomain = '';
@@ -12,6 +12,12 @@
   let search = '';
   let open = false;
   let root: HTMLElement;
+  let brokenFavicons = new Set<string>();
+
+  function markFaviconBroken(url: string): void {
+    if (brokenFavicons.has(url)) return;
+    brokenFavicons = new Set(brokenFavicons).add(url);
+  }
 
   $: filteredDomains = domains.filter((domain) => domain.domain.includes(search.trim().toLowerCase()));
   $: selectedSummary = domains.find((domain) => domain.domain === selectedDomain);
@@ -46,8 +52,8 @@
 <section class="domain-picker-row" bind:this={root}>
   <div class="domain-picker">
     <button class:open class="domain-trigger" type="button" aria-expanded={open} onclick={() => (open = !open)}>
-      {#if selectedSummary?.faviconUrl}
-        <img class="favicon" src={selectedSummary.faviconUrl} alt="" onerror={hideBrokenIcon} />
+      {#if selectedSummary?.faviconUrl && !brokenFavicons.has(selectedSummary.faviconUrl)}
+        <img class="favicon" src={selectedSummary.faviconUrl} alt="" onerror={() => markFaviconBroken(selectedSummary!.faviconUrl!)} />
       {:else}
         <span class="favicon fallback">{domainInitial(selectedDomain)}</span>
       {/if}
@@ -70,8 +76,8 @@
         <div class="domain-options">
           {#each filteredDomains as domain}
             <button class:selected={domain.domain === selectedDomain} type="button" onclick={() => select(domain.domain)}>
-              {#if domain.faviconUrl}
-                <img class="favicon" src={domain.faviconUrl} alt="" onerror={hideBrokenIcon} />
+              {#if domain.faviconUrl && !brokenFavicons.has(domain.faviconUrl)}
+                <img class="favicon" src={domain.faviconUrl} alt="" onerror={() => markFaviconBroken(domain.faviconUrl!)} />
               {:else}
                 <span class="favicon fallback">{domainInitial(domain.domain)}</span>
               {/if}
