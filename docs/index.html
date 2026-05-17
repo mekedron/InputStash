@@ -261,6 +261,8 @@
     cursor: pointer;
     transition: border-color .12s ease, background-color .12s ease, color .12s ease, transform .08s ease;
     flex-shrink: 0;
+    /* Push to the rightmost slot on desktop; mobile media query resets this. */
+    order: 1;
   }
   .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
   .theme-toggle:active { transform: scale(0.94); }
@@ -295,6 +297,7 @@
   @media (max-width: 720px) {
     .site-inner { padding: 10px 16px; gap: 10px; }
     .nav-toggle { display: inline-flex; }
+    .theme-toggle { order: 0; }
     .nav {
       position: absolute;
       top: 100%;
