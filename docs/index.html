@@ -8,8 +8,23 @@
 <link rel="icon" type="image/svg+xml" href="icons/inputstash.svg" />
 <link rel="icon" type="image/png" sizes="128x128" href="icons/inputstash-128.png" />
 <link rel="icon" type="image/png" sizes="32x32" href="icons/inputstash-32.png" />
+<script>
+  // Apply theme before paint to avoid a flash.
+  (function () {
+    try {
+      var v = localStorage.getItem('inputstash-theme');
+      var mode = (v === 'light' || v === 'dark') ? v : 'auto';
+      var resolved = mode === 'auto'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : mode;
+      document.documentElement.setAttribute('data-theme', resolved);
+    } catch (e) {}
+  })();
+</script>
 <style>
   :root {
+    color-scheme: light;
+
     --bg-page: #f6f7f2;
     --bg-app-start: #f9faf4;
     --bg-app-end: #eef3ef;
@@ -40,6 +55,75 @@
     --shadow-card: 0 10px 24px rgba(25, 27, 28, 0.08);
     --shadow-lift: 0 18px 38px rgba(25, 27, 28, 0.12);
     --shadow-popup: 0 30px 80px rgba(25, 27, 28, 0.18);
+
+    --header-bg: rgba(246, 247, 242, 0.78);
+    --header-bg-mobile: rgba(246, 247, 242, 0.98);
+    --browser-bar-bg: rgba(25, 27, 28, 0.025);
+    --popup-wrap-bg: linear-gradient(180deg, #fafbf5 0%, #ecf2ee 100%);
+    --privacy-bg:
+      radial-gradient(800px 320px at 20% 0%, rgba(47, 127, 109, 0.11), transparent 60%),
+      linear-gradient(180deg, #f4f7f0 0%, #ecf3ee 100%);
+
+    --inverse-bg: #191b1c;
+    --inverse-fg: #fffdf7;
+    --inverse-fg-muted: rgba(255, 253, 247, 0.7);
+    --inverse-fg-faint: rgba(255, 253, 247, 0.5);
+    --inverse-surface: rgba(255, 253, 247, 0.06);
+    --inverse-surface-strong: rgba(255, 253, 247, 0.10);
+    --inverse-border: rgba(255, 253, 247, 0.18);
+    --inverse-border-soft: rgba(255, 253, 247, 0.12);
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --bg-page: #0e1011;
+    --bg-app-start: #14171a;
+    --bg-app-end: #0e1213;
+    --bg-app-accent: rgba(216, 78, 53, 0.16);
+    --bg-panel: rgba(20, 22, 24, 0.86);
+    --bg-chip: rgba(255, 253, 247, 0.06);
+
+    --surface: #1a1d1f;
+    --surface-inset: #141719;
+
+    --fg: #f1ece2;
+    --fg-body: #c6c1b6;
+    --fg-muted: #8a877f;
+    --fg-danger: #ff8270;
+
+    --accent: #5fc4a6;
+    --accent-soft: rgba(95, 196, 166, 0.18);
+
+    --brand-warm: #ff7b5e;
+    --donate: #ffdd00;
+
+    --border: rgba(255, 253, 247, 0.16);
+    --border-soft: rgba(255, 253, 247, 0.09);
+    --border-panel: rgba(255, 253, 247, 0.12);
+    --border-card: rgba(255, 253, 247, 0.10);
+    --border-divider: rgba(255, 253, 247, 0.09);
+
+    --shadow-card: 0 10px 24px rgba(0, 0, 0, 0.5);
+    --shadow-lift: 0 18px 38px rgba(0, 0, 0, 0.55);
+    --shadow-popup: 0 30px 80px rgba(0, 0, 0, 0.6);
+
+    --header-bg: rgba(14, 16, 17, 0.78);
+    --header-bg-mobile: rgba(14, 16, 17, 0.98);
+    --browser-bar-bg: rgba(255, 253, 247, 0.04);
+    --popup-wrap-bg: linear-gradient(180deg, #1c1f22 0%, #131618 100%);
+    --privacy-bg:
+      radial-gradient(800px 320px at 20% 0%, rgba(95, 196, 166, 0.13), transparent 60%),
+      linear-gradient(180deg, #11161a 0%, #0d1113 100%);
+
+    --inverse-bg: #050708;
+    --inverse-fg: #f1ece2;
+    --inverse-fg-muted: rgba(241, 236, 226, 0.72);
+    --inverse-fg-faint: rgba(241, 236, 226, 0.5);
+    --inverse-surface: rgba(241, 236, 226, 0.06);
+    --inverse-surface-strong: rgba(241, 236, 226, 0.10);
+    --inverse-border: rgba(241, 236, 226, 0.18);
+    --inverse-border-soft: rgba(241, 236, 226, 0.12);
   }
 
   * { box-sizing: border-box; }
@@ -51,6 +135,7 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     line-height: 1.45;
+    transition: background-color .2s ease, color .2s ease;
   }
 
   a { color: inherit; }
@@ -65,7 +150,7 @@
     top: 0;
     z-index: 30;
     backdrop-filter: saturate(140%) blur(14px);
-    background: rgba(246, 247, 242, 0.78);
+    background: var(--header-bg);
     border-bottom: 1px solid var(--border-soft);
   }
   .site-inner {
@@ -74,9 +159,9 @@
     padding: 12px 24px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 16px;
   }
+  .site-inner .brand { margin-right: auto; }
   .brand {
     display: inline-flex;
     align-items: center;
@@ -161,6 +246,32 @@
   .btn-install:active { transform: translateY(0); box-shadow: inset 0 1px 0 rgba(25,27,28,.18); }
   .btn-install svg { width: 16px; height: 16px; }
 
+  /* Theme toggle — three-state circle (auto / light / dark) */
+  .theme-toggle {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--fg);
+    cursor: pointer;
+    transition: border-color .12s ease, background-color .12s ease, color .12s ease, transform .08s ease;
+    flex-shrink: 0;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .theme-toggle:active { transform: scale(0.94); }
+  .theme-toggle svg { width: 16px; height: 16px; display: block; }
+  .theme-toggle .icon-auto,
+  .theme-toggle .icon-light,
+  .theme-toggle .icon-dark { display: none; }
+  .theme-toggle[data-mode="auto"] .icon-auto,
+  .theme-toggle[data-mode="light"] .icon-light,
+  .theme-toggle[data-mode="dark"] .icon-dark { display: block; }
+
   /* Hamburger toggle — hidden on desktop, shown on mobile */
   .nav-toggle {
     display: none;
@@ -193,7 +304,7 @@
       align-items: stretch;
       gap: 6px;
       padding: 12px 16px 16px;
-      background: rgba(246, 247, 242, 0.98);
+      background: var(--header-bg-mobile);
       backdrop-filter: saturate(140%) blur(14px);
       border-bottom: 1px solid var(--border-soft);
       box-shadow: 0 12px 24px rgba(25, 27, 28, 0.08);
@@ -355,7 +466,7 @@
     gap: 8px;
     padding: 10px 14px;
     border-bottom: 1px solid var(--border-soft);
-    background: rgba(25,27,28,.025);
+    background: var(--browser-bar-bg);
   }
   .traffic { display: flex; gap: 6px; }
   .traffic i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
@@ -393,21 +504,21 @@
   .popup-wrap {
     position: relative;
     padding: 20px 20px 24px;
-    background: linear-gradient(180deg, #fafbf5 0%, #ecf2ee 100%);
+    background: var(--popup-wrap-bg);
   }
   .popup-image {
     width: 100%;
     display: block;
     border-radius: 12px;
-    box-shadow: 0 18px 40px rgba(25, 27, 28, 0.14), 0 0 0 1px rgba(25, 27, 28, 0.06);
+    box-shadow: var(--shadow-lift), 0 0 0 1px var(--border-soft);
   }
   /* floating callout */
   .pop-callout {
     position: absolute;
     top: 38px;
     right: -18px;
-    background: var(--fg);
-    color: var(--surface);
+    background: var(--inverse-bg);
+    color: var(--inverse-fg);
     padding: 10px 12px;
     border-radius: 10px;
     font-size: 12px;
@@ -421,7 +532,7 @@
     left: -8px;
     top: 16px;
     border: 6px solid transparent;
-    border-right-color: var(--fg);
+    border-right-color: var(--inverse-bg);
   }
   @media (max-width: 960px) {
     .pop-callout { right: 12px; top: 24px; }
@@ -468,8 +579,8 @@
 
   /* ===== Problem strip ===== */
   .problem {
-    background: var(--fg);
-    color: var(--surface);
+    background: var(--inverse-bg);
+    color: var(--inverse-fg);
     padding: 60px 0;
     position: relative;
     overflow: hidden;
@@ -487,16 +598,16 @@
     letter-spacing: -0.01em;
     text-wrap: balance;
   }
-  .problem .quote .strike { color: rgba(255, 253, 247, 0.5); text-decoration: line-through; text-decoration-thickness: 2px; }
+  .problem .quote .strike { color: var(--inverse-fg-faint); text-decoration: line-through; text-decoration-thickness: 2px; }
   .problem .quote em {
     font-style: normal;
     background: var(--brand-warm);
     padding: 0 6px;
     border-radius: 4px;
-    color: var(--surface);
+    color: var(--inverse-fg);
   }
   .problem .meta {
-    color: rgba(255, 253, 247, 0.7);
+    color: var(--inverse-fg-muted);
     font-size: 13px;
     text-align: right;
   }
@@ -571,11 +682,11 @@
     border-radius: 8px;
     display: grid;
     place-items: center;
-    color: var(--surface);
-    background: var(--fg);
+    color: var(--inverse-fg);
+    background: var(--inverse-bg);
     font-weight: 800;
     font-size: 14px;
-    border: 1px solid var(--fg);
+    border: 1px solid var(--inverse-bg);
   }
   .step h4 { margin: 4px 0 4px; font-size: 15.5px; font-weight: 700; }
   .step p { color: var(--fg-muted); font-size: 14px; line-height: 1.5; }
@@ -591,9 +702,7 @@
 
   /* ===== Privacy ===== */
   .privacy {
-    background:
-      radial-gradient(800px 320px at 20% 0%, rgba(47, 127, 109, 0.11), transparent 60%),
-      linear-gradient(180deg, #f4f7f0 0%, #ecf3ee 100%);
+    background: var(--privacy-bg);
   }
   .privacy-card {
     background: var(--surface);
@@ -610,7 +719,7 @@
     width: 72px; height: 72px;
     border-radius: 18px;
     background: linear-gradient(135deg, var(--accent), #21574a);
-    color: var(--surface);
+    color: #fffdf7;
     display: grid; place-items: center;
     box-shadow: 0 12px 24px rgba(47, 127, 109, 0.22);
   }
@@ -710,8 +819,8 @@
 
   /* ===== Open source / Support ===== */
   .support {
-    background: var(--fg);
-    color: var(--surface);
+    background: var(--inverse-bg);
+    color: var(--inverse-fg);
     position: relative;
     overflow: hidden;
   }
@@ -731,9 +840,9 @@
     align-items: center;
   }
   @media (max-width: 920px) { .support .container { grid-template-columns: 1fr; } }
-  .support h2 { color: var(--surface); }
+  .support h2 { color: var(--inverse-fg); }
   .support h2 .yellow { color: var(--donate); }
-  .support p { color: rgba(255, 253, 247, 0.78); font-size: 17px; max-width: 56ch; margin-top: 16px; line-height: 1.55; }
+  .support p { color: var(--inverse-fg-muted); font-size: 17px; max-width: 56ch; margin-top: 16px; line-height: 1.55; }
   .support .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
 
   .support-cta {
@@ -758,19 +867,19 @@
     align-items: center;
     gap: 10px;
     padding: 14px 18px;
-    color: var(--surface);
-    background: rgba(255, 253, 247, 0.06);
-    border: 1px solid rgba(255, 253, 247, 0.18);
+    color: var(--inverse-fg);
+    background: var(--inverse-surface);
+    border: 1px solid var(--inverse-border);
     border-radius: 12px;
     font-size: 14px;
     font-weight: 600;
     text-decoration: none;
   }
-  .support-ghost:hover { background: rgba(255, 253, 247, 0.10); }
+  .support-ghost:hover { background: var(--inverse-surface-strong); }
 
   .help-list {
-    background: rgba(255, 253, 247, 0.04);
-    border: 1px solid rgba(255, 253, 247, 0.12);
+    background: var(--inverse-surface);
+    border: 1px solid var(--inverse-border-soft);
     border-radius: 16px;
     padding: 22px;
     display: grid;
@@ -790,8 +899,8 @@
     display: grid; place-items: center;
   }
   .help-row .badge svg { width: 16px; height: 16px; }
-  .help-row strong { font-size: 14px; color: var(--surface); font-weight: 700; display: block; margin-bottom: 2px; }
-  .help-row span { font-size: 13px; color: rgba(255, 253, 247, 0.7); line-height: 1.5; }
+  .help-row strong { font-size: 14px; color: var(--inverse-fg); font-weight: 700; display: block; margin-bottom: 2px; }
+  .help-row span { font-size: 13px; color: var(--inverse-fg-muted); line-height: 1.5; }
 
   /* ===== Footer ===== */
   footer {
@@ -858,6 +967,11 @@
       <img class="brand-mark" src="icons/inputstash.svg" alt="" />
       <span class="brand-name">InputStash</span>
     </a>
+    <button class="theme-toggle" type="button" data-mode="auto" aria-label="Color theme: auto. Click to change." title="Theme: auto">
+      <svg class="icon-auto" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
+      <svg class="icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
+      <svg class="icon-dark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 0 0 12 21a9.003 9.003 0 0 0 8.354-5.646z"/></svg>
+    </button>
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Toggle menu">
       <svg class="icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
@@ -1264,6 +1378,52 @@
     var onChange = function (ev) { if (ev.matches) setOpen(false); };
     if (mq.addEventListener) mq.addEventListener('change', onChange);
     else mq.addListener(onChange);
+  })();
+
+  // Theme toggle — cycles auto → light → dark and persists choice.
+  (function () {
+    var btn = document.querySelector('.theme-toggle');
+    if (!btn) return;
+    var root = document.documentElement;
+    var STORAGE_KEY = 'inputstash-theme';
+    var MODES = ['auto', 'light', 'dark'];
+    var darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function readPref() {
+      try {
+        var v = localStorage.getItem(STORAGE_KEY);
+        return (v === 'light' || v === 'dark') ? v : 'auto';
+      } catch (e) { return 'auto'; }
+    }
+
+    function writePref(v) {
+      try {
+        if (v === 'auto') localStorage.removeItem(STORAGE_KEY);
+        else localStorage.setItem(STORAGE_KEY, v);
+      } catch (e) {}
+    }
+
+    function apply(pref) {
+      var resolved = pref === 'auto' ? (darkMQ.matches ? 'dark' : 'light') : pref;
+      root.setAttribute('data-theme', resolved);
+      btn.setAttribute('data-mode', pref);
+      var labels = { auto: 'auto (follows system)', light: 'light', dark: 'dark' };
+      btn.setAttribute('aria-label', 'Color theme: ' + labels[pref] + '. Click to change.');
+      btn.title = 'Theme: ' + labels[pref];
+    }
+
+    btn.addEventListener('click', function () {
+      var current = readPref();
+      var next = MODES[(MODES.indexOf(current) + 1) % MODES.length];
+      writePref(next);
+      apply(next);
+    });
+
+    var onSystemChange = function () { if (readPref() === 'auto') apply('auto'); };
+    if (darkMQ.addEventListener) darkMQ.addEventListener('change', onSystemChange);
+    else if (darkMQ.addListener) darkMQ.addListener(onSystemChange);
+
+    apply(readPref());
   })();
 </script>
 
