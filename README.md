@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/icon/128.png" alt="InputStash icon" width="128" height="128" />
+</p>
+
 # InputStash
 
 Never lose what you typed.
@@ -95,8 +99,10 @@ Runs `svelte-check` followed by `tsc --noEmit`.
 ├── components/
 │   ├── storage.ts           # thin wrapper around browser.storage.local — TODO
 │   └── types.ts             # StashEntry
+├── assets/
+│   └── icon.svg            # icon source — rasterized into public/icon/
 └── public/
-    └── icon/                # placeholder icons — replace with real artwork
+    └── icon/                # 16/32/48/96/128 PNGs used by the manifest
 ```
 
 ## Roadmap

@@ -34,9 +34,6 @@
 
   --shadow-card: 0 10px 24px rgba(25, 27, 28, 0.08);
   --shadow-menu: 0 18px 38px rgba(25, 27, 28, 0.18);
-
-  --mark-bg: #191b1c;
-  --mark-fg: #fffdf7;
 }
 
 :root[data-theme='dark'] {
@@ -75,9 +72,6 @@
 
   --shadow-card: 0 10px 24px rgba(0, 0, 0, 0.4);
   --shadow-menu: 0 18px 38px rgba(0, 0, 0, 0.5);
-
-  --mark-bg: #fffdf7;
-  --mark-fg: #191b1c;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -117,9 +111,6 @@
 
     --shadow-card: 0 10px 24px rgba(0, 0, 0, 0.4);
     --shadow-menu: 0 18px 38px rgba(0, 0, 0, 0.5);
-
-    --mark-bg: #fffdf7;
-    --mark-fg: #191b1c;
   }
 }
 
@@ -197,17 +188,12 @@ main {
 }
 
 .mini-mark {
-  display: grid;
+  display: block;
   width: 24px;
   height: 24px;
   flex: 0 0 auto;
-  place-items: center;
-  color: var(--mark-fg);
-  background: var(--mark-bg);
-  border: 1px solid var(--brand-warm);
-  border-radius: 7px;
-  font-size: 10px;
-  font-weight: 800;
+  object-fit: contain;
+  border-radius: 6px;
 }
 
 .mini-actions {

@@ -1,0 +1,83 @@
+<svg width="1254" height="1254" viewBox="0 0 1254 1254" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(627 627) rotate(90) scale(760)">
+      <stop offset="0" stop-color="#111317"/>
+      <stop offset="1" stop-color="#05070A"/>
+    </radialGradient>
+
+    <linearGradient id="accent" x1="627" y1="339" x2="627" y2="813" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F36B4D"/>
+      <stop offset="1" stop-color="#D94C35"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Red rim — outermost layer, flush with the icon edge -->
+  <rect x="0" y="0" width="1254" height="1254" rx="190" fill="#D94C35"/>
+
+  <!-- Dark background, inset by the rim thickness -->
+  <rect x="60" y="60" width="1134" height="1134" rx="130" fill="url(#bg)"/>
+
+  <!-- Top rounded rectangle -->
+  <rect
+    x="267"
+    y="293"
+    width="720"
+    height="256"
+    rx="76"
+    stroke="#FFFFFF"
+    stroke-width="36"
+  />
+
+  <!-- Red cursor line -->
+  <rect x="351" y="339" width="30" height="161" rx="15" fill="url(#accent)"/>
+
+  <!-- Tray cover lines -->
+  <path
+    d="M384 709 H483
+       M384 709 L327 813
+       M870 709 H771
+       M870 709 L927 813"
+    stroke="#FFFFFF"
+    stroke-width="38"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Tray body widened by half the stroke width on both sides for proper alignment -->
+  <path
+    d="M308 813
+       H479
+       C499 813 516 826 522 845
+       L531 872
+       C538 894 559 909 582 909
+       H672
+       C695 909 716 894 723 872
+       L732 845
+       C738 826 755 813 775 813
+       H946
+       V930
+       C946 964 918 992 884 992
+       H370
+       C336 992 308 964 308 930
+       V813
+       Z"
+    fill="#FFFFFF"
+  />
+
+  <!-- Arrow shaft -->
+  <path
+    d="M627 614 V776"
+    stroke="url(#accent)"
+    stroke-width="40"
+    stroke-linecap="round"
+  />
+
+  <!-- Arrow head -->
+  <path
+    d="M550 736 L627 813 L704 736"
+    stroke="url(#accent)"
+    stroke-width="40"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
