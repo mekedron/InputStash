@@ -11,7 +11,7 @@ A cross-browser extension that quietly remembers what you've typed into form fie
 > Built and maintained by one indie developer. If it saves you a painful retype, [☕ buy me a coffee](https://buymeacoffee.com/mekedron) — it keeps InputStash free and ad-free.
 
 <p align="center">
-  <img src="docs/images/popup-screenshot.png" alt="InputStash popup: domain summary at the top, with an expanded panel listing recovered fields and their latest values." width="480" />
+  <img src="docs/images/popup-in-context.png" alt="InputStash popup open over a browser tab on textarea.online, showing the recovered text editor field with two records." width="720" />
 </p>
 
 ## What it does
