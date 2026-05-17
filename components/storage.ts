@@ -1,5 +1,6 @@
 import type {
   CaptureSnapshot,
+  ColorScheme,
   DomainHistory,
   DomainSummary,
   FieldHistory,
@@ -13,6 +14,8 @@ export const STATE_KEY = 'inputstash:domains:v1';
 export const SETTINGS_KEY = 'inputstash:settings:v1';
 export const DEFAULT_HISTORY_LIMIT = 20;
 export const DEFAULT_IDENTITY_THRESHOLD = 50;
+export const DEFAULT_COLOR_SCHEME: ColorScheme = 'auto';
+const COLOR_SCHEMES: readonly ColorScheme[] = ['auto', 'light', 'dark'];
 const COALESCE_WINDOW_MS = 45_000;
 
 export const DEFAULT_SETTINGS: InputStashSettings = {
@@ -20,7 +23,12 @@ export const DEFAULT_SETTINGS: InputStashSettings = {
   identityThreshold: DEFAULT_IDENTITY_THRESHOLD,
   blockedDomains: [],
   blockedFields: {},
+  colorScheme: DEFAULT_COLOR_SCHEME,
 };
+
+export function normalizeColorScheme(value: unknown): ColorScheme {
+  return COLOR_SCHEMES.includes(value as ColorScheme) ? (value as ColorScheme) : DEFAULT_COLOR_SCHEME;
+}
 
 const EMPTY_STATE: StashState = { domains: {} };
 
@@ -252,6 +260,7 @@ function normalizeSettings(raw: unknown): InputStashSettings {
         : DEFAULT_IDENTITY_THRESHOLD,
     blockedDomains: [...new Set((settings?.blockedDomains || []).map(normalizeDomain).filter(Boolean))].sort(),
     blockedFields,
+    colorScheme: normalizeColorScheme(settings?.colorScheme),
   };
 }
 

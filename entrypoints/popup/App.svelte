@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Ban, Check, Copy, History, RotateCcw, Settings, ShieldCheck, Trash2, X } from '@lucide/svelte';
+  import { Ban, Check, Coffee, Copy, Heart, History, Monitor, Moon, RotateCcw, Settings, ShieldCheck, Sun, Trash2, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import {
     fieldMatchesFilter,
@@ -25,9 +25,15 @@
     normalizeDomain,
     saveSettings,
   } from '../../components/storage';
-  import type { DomainHistory, DomainSummary, FieldHistory, InputStashSettings, StashRecord } from '../../components/types';
+  import type { ColorScheme, DomainHistory, DomainSummary, FieldHistory, InputStashSettings, StashRecord } from '../../components/types';
 
   type View = 'domain' | 'settings';
+
+  const THEME_OPTIONS: Array<{ value: ColorScheme; label: string; icon: typeof Monitor }> = [
+    { value: 'auto', label: 'Auto', icon: Monitor },
+    { value: 'light', label: 'Light', icon: Sun },
+    { value: 'dark', label: 'Dark', icon: Moon },
+  ];
 
   let view: View = 'domain';
   let domains: DomainSummary[] = [];
@@ -43,6 +49,7 @@
   let copyFeedback = '';
   let settings: InputStashSettings = normalizePopupSettings(undefined);
 
+  $: applyColorScheme(settings.colorScheme);
   $: fields = domainData ? Object.values(domainData.fields).sort((a, b) => b.lastUpdated - a.lastUpdated) : [];
   $: visibleFields = fields.filter((field) => fieldMatchesFilter(field, inputSearch));
   $: selectedSummary = domains.find((domain) => domain.domain === selectedDomain);
@@ -111,6 +118,16 @@
     const normalized = Number.isFinite(Number(historyLimit)) ? Math.max(0, Math.floor(Number(historyLimit))) : 20;
     settings = await saveSettings({ historyLimit: normalized });
     historyLimit = settings.historyLimit;
+  }
+
+  function applyColorScheme(scheme: ColorScheme): void {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-theme', scheme);
+  }
+
+  async function saveColorScheme(scheme: ColorScheme): Promise<void> {
+    if (settings.colorScheme === scheme) return;
+    settings = await saveSettings({ colorScheme: scheme });
   }
 
   async function saveIdentityThreshold(): Promise<void> {
@@ -214,15 +231,27 @@
         <small>{domains.length} domains</small>
       </span>
     </button>
-    {#if view === 'settings'}
-      <button class="mini-action" type="button" aria-label="History" title="History" onclick={() => (view = 'domain')}>
-        <History size={14} aria-hidden="true" />
-      </button>
-    {:else}
-      <button class="mini-action" type="button" aria-label="Settings" title="Settings" onclick={() => (view = 'settings')}>
-        <Settings size={14} aria-hidden="true" />
-      </button>
-    {/if}
+    <div class="mini-actions">
+      <a
+        class="mini-donate"
+        href="https://buymeacoffee.com/mekedron"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Buy me a coffee — support the developer"
+      >
+        <Coffee size={13} aria-hidden="true" />
+        <span>Donate</span>
+      </a>
+      {#if view === 'settings'}
+        <button class="mini-action" type="button" aria-label="History" title="History" onclick={() => (view = 'domain')}>
+          <History size={14} aria-hidden="true" />
+        </button>
+      {:else}
+        <button class="mini-action" type="button" aria-label="Settings" title="Settings" onclick={() => (view = 'settings')}>
+          <Settings size={14} aria-hidden="true" />
+        </button>
+      {/if}
+    </div>
   </header>
 
   {#if isLoading}
@@ -235,6 +264,27 @@
       <div class="section-title">
         <h2>Settings</h2>
         <span>{blockedDomainCount} blocked domains · {blockedFieldCount} blocked inputs</span>
+      </div>
+
+      <div class="setting-row">
+        <span>
+          <strong>Theme</strong>
+          <small>Match the browser, or pick one.</small>
+        </span>
+        <div class="theme-switch" role="group" aria-label="Color scheme">
+          {#each THEME_OPTIONS as option}
+            <button
+              type="button"
+              class:active={settings.colorScheme === option.value}
+              aria-pressed={settings.colorScheme === option.value}
+              aria-label={option.label}
+              title={option.label}
+              onclick={() => saveColorScheme(option.value)}
+            >
+              <option.icon size={14} aria-hidden="true" />
+            </button>
+          {/each}
+        </div>
       </div>
 
       <label class="setting-row">
@@ -303,6 +353,28 @@
           <p>No blocked inputs.</p>
         {/if}
       </div>
+
+      <aside class="support-card">
+        <div class="support-text">
+          <strong>
+            <Heart size={13} aria-hidden="true" />
+            Support InputStash
+          </strong>
+          <small>
+            InputStash is built and maintained by one indie developer. If it saved you a
+            painful retype, a coffee goes a long way toward keeping it free and ad-free.
+          </small>
+        </div>
+        <a
+          class="support-cta"
+          href="https://buymeacoffee.com/mekedron"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Coffee size={14} aria-hidden="true" />
+          <span>Buy me a coffee</span>
+        </a>
+      </aside>
 
       <div class="settings-reset">
         <button class="danger icon-only" type="button" aria-label="Reset defaults" title="Reset defaults" onclick={resetSettingsToDefaults}>
@@ -389,25 +461,53 @@
             {@const records = visibleRecords(field, inputSearch)}
             <article class:expanded={expandedFieldKey === field.fieldKey} class="field-card">
               <div class="field-summary-row">
-                <button class="field-summary" type="button" onclick={() => toggleField(field.fieldKey)}>
-                  <span>
+                <div class="field-summary">
+                  <span class="field-summary-text">
                     <strong>{bestFieldName(field)}</strong>
                     <small>{records.length} {records.length === 1 ? 'record' : 'records'} · {field.inputType} · {formatTime(field.lastUpdated)}</small>
                   </span>
+                </div>
+                <button
+                  class="icon-only field-history-toggle"
+                  class:active={expandedFieldKey === field.fieldKey}
+                  type="button"
+                  aria-expanded={expandedFieldKey === field.fieldKey}
+                  aria-label={expandedFieldKey === field.fieldKey ? 'Hide history' : 'Show history'}
+                  title={expandedFieldKey === field.fieldKey ? 'Hide history' : 'Show history'}
+                  onclick={() => toggleField(field.fieldKey)}
+                >
+                  <History size={15} aria-hidden="true" />
                 </button>
-                {#if latest}
-                  <button class="quick-copy" type="button" aria-label="Copy latest value" title="Copy latest value" onclick={() => copyValue(latest)}>
-                    {#if copyFeedback === latest.id}
-                      <Check size={15} aria-hidden="true" />
-                    {:else}
-                      <Copy size={15} aria-hidden="true" />
-                    {/if}
-                  </button>
-                {/if}
               </div>
 
               {#if latest}
-                <p class="preview">{preview(latest.value)}</p>
+                <section class="field-latest">
+                  <p>{preview(latest.value)}</p>
+                  <div class="field-latest-actions">
+                    <button
+                      class="icon-only"
+                      type="button"
+                      aria-label="Copy latest value"
+                      title={copyFeedback === latest.id ? 'Copied' : 'Copy latest value'}
+                      onclick={() => copyValue(latest)}
+                    >
+                      {#if copyFeedback === latest.id}
+                        <Check size={15} aria-hidden="true" />
+                      {:else}
+                        <Copy size={15} aria-hidden="true" />
+                      {/if}
+                    </button>
+                    <button
+                      class="danger icon-only"
+                      type="button"
+                      aria-label="Clear field history"
+                      title="Clear field history"
+                      onclick={() => removeField(field)}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </section>
               {/if}
 
               {#if expandedFieldKey === field.fieldKey}

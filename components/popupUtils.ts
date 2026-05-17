@@ -1,4 +1,4 @@
-import { bestFieldName } from './storage';
+import { bestFieldName, normalizeColorScheme } from './storage';
 import type { FieldHistory, InputStashSettings, StashRecord } from './types';
 
 export function normalizePopupSettings(raw: unknown): InputStashSettings {
@@ -8,6 +8,7 @@ export function normalizePopupSettings(raw: unknown): InputStashSettings {
     identityThreshold: Number(value?.identityThreshold ?? 50),
     blockedDomains: value?.blockedDomains || [],
     blockedFields: value?.blockedFields || {},
+    colorScheme: normalizeColorScheme(value?.colorScheme),
   };
 }
 

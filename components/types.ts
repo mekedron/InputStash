@@ -1,10 +1,13 @@
 export type CaptureReason = 'input' | 'change' | 'blur' | 'submit';
 
+export type ColorScheme = 'auto' | 'light' | 'dark';
+
 export interface InputStashSettings {
   historyLimit: number;
   identityThreshold: number;
   blockedDomains: string[];
   blockedFields: Record<string, string[]>;
+  colorScheme: ColorScheme;
 }
 
 export interface CaptureSnapshot {

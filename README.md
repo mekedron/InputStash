@@ -4,6 +4,8 @@ Never lose what you typed.
 
 A cross-browser extension that quietly remembers what you've typed into form fields, so an accidental `Esc`, a rogue keyboard shortcut, a refresh, or a tab close never destroys your draft again. Open the toolbar icon, find the input you lost, copy it back.
 
+> Built and maintained by one indie developer. If it saves you a painful retype, [☕ buy me a coffee](https://buymeacoffee.com/mekedron) — it keeps InputStash free and ad-free.
+
 ## Status
 
 **Scaffold only.** No input-capture logic is wired up yet — the popup, content script, and background entrypoints are stubs with TODOs. The hard parts (catching input across `<input>`, `<textarea>`, `contenteditable`, shadow DOM, iframes, SPAs) are deliberately deferred to a follow-up.
@@ -110,6 +112,20 @@ The interesting work is still ahead. Rough order:
 7. **Popup UI** — list grouped by origin / time, search, one-click copy, delete, clear-all, per-origin opt-out toggle.
 8. **Safari packaging** — wrap with `safari-web-extension-converter`, address any WebKit-specific quirks.
 
+## Support the project
+
+InputStash is a solo indie effort — no company, no investors, no ads, no analytics. Every snapshot stays on your device.
+
+If it earned its place in your toolbar, the easiest way to help is to chip in a coffee:
+
+**[☕ buymeacoffee.com/mekedron](https://buymeacoffee.com/mekedron)**
+
+Other ways to help that cost nothing:
+
+- Star this repo so more people find it.
+- File a bug or feature request in [Issues](../../issues).
+- Tell a friend who keeps losing half-written emails.
+
 ## License
 
-TBD.
+[MIT](LICENSE) © Nikita R

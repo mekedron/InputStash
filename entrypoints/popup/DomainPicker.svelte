@@ -37,6 +37,10 @@
     open = false;
     await onSelect(domain);
   }
+
+  function autofocus(node: HTMLInputElement): void {
+    node.focus();
+  }
 </script>
 
 <section class="domain-picker-row" bind:this={root}>
@@ -62,7 +66,7 @@
 
     {#if open}
       <div class="domain-menu">
-        <input aria-label="Filter domains" placeholder="Filter domains" bind:value={search} />
+        <input use:autofocus aria-label="Filter domains" placeholder="Filter domains" bind:value={search} />
         <div class="domain-options">
           {#each filteredDomains as domain}
             <button class:selected={domain.domain === selectedDomain} type="button" onclick={() => select(domain.domain)}>
@@ -113,17 +117,17 @@
     width: 100%;
     min-height: 46px;
     padding: 8px 10px;
-    color: #191b1c;
+    color: var(--fg);
     text-align: left;
-    background: #fffdf7;
-    border: 1px solid rgba(25, 27, 28, 0.15);
+    background: var(--surface);
+    border: 1px solid var(--border-input);
     border-radius: 8px;
   }
 
   .domain-trigger.open,
   .domain-trigger:hover {
-    border-color: #2f7f6d;
-    box-shadow: 0 0 0 3px rgba(47, 127, 109, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-focus-shadow);
   }
 
   .domain-trigger-text,
@@ -138,7 +142,7 @@
 
   :global(.chevron) {
     justify-self: center;
-    color: #69706f;
+    color: var(--fg-muted);
     transition: transform 120ms ease;
   }
 
@@ -156,8 +160,8 @@
   .favicon.fallback {
     display: grid;
     place-items: center;
-    color: #fffdf7;
-    background: #2f7f6d;
+    color: var(--surface);
+    background: var(--accent);
     font-size: 11px;
     font-weight: 800;
   }
@@ -171,25 +175,25 @@
     display: grid;
     gap: 8px;
     padding: 9px;
-    background: #fffdf7;
-    border: 1px solid rgba(25, 27, 28, 0.14);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    box-shadow: 0 18px 38px rgba(25, 27, 28, 0.18);
+    box-shadow: var(--shadow-menu);
   }
 
   .domain-menu input {
     min-width: 0;
     padding: 9px 10px;
-    color: #191b1c;
-    background: #fffdf7;
-    border: 1px solid rgba(25, 27, 28, 0.15);
+    color: var(--fg);
+    background: var(--surface);
+    border: 1px solid var(--border-input);
     border-radius: 8px;
     outline: none;
   }
 
   .domain-menu input:focus {
-    border-color: #2f7f6d;
-    box-shadow: 0 0 0 3px rgba(47, 127, 109, 0.14);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
   .current {
@@ -200,15 +204,15 @@
     width: 46px;
     height: 46px;
     padding: 0;
-    color: #191b1c;
-    background: #fffdf7;
-    border: 1px solid rgba(25, 27, 28, 0.14);
+    color: var(--fg);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
   }
 
   .current:hover {
-    border-color: #2f7f6d;
-    box-shadow: inset 0 -2px 0 rgba(47, 127, 109, 0.2);
+    border-color: var(--accent);
+    box-shadow: inset 0 -2px 0 var(--accent-shadow);
   }
 
   .domain-options {
@@ -224,7 +228,7 @@
     gap: 9px;
     width: 100%;
     padding: 8px;
-    color: #191b1c;
+    color: var(--fg);
     text-align: left;
     background: transparent;
     border: 0;
@@ -233,7 +237,7 @@
 
   .domain-options button:hover,
   .domain-options button.selected {
-    background: #eef3ef;
+    background: var(--bg-option-hover);
   }
 
   .domain-options strong,
@@ -247,7 +251,7 @@
 
   .domain-options p {
     padding: 18px 8px;
-    color: #69706f;
+    color: var(--fg-muted);
     text-align: center;
   }
 </style>

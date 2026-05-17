@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS: InputStashSettings = {
   identityThreshold: 50,
   blockedDomains: [],
   blockedFields: {},
+  colorScheme: 'auto',
 };
 
 interface ElementSession {
@@ -411,6 +412,7 @@ function normalizeSettings(raw: unknown): InputStashSettings {
     identityThreshold: Number(settings?.identityThreshold ?? DEFAULT_SETTINGS.identityThreshold),
     blockedDomains: Array.isArray(settings?.blockedDomains) ? settings.blockedDomains.map(normalizeMetadataDomain) : [],
     blockedFields: settings?.blockedFields || {},
+    colorScheme: DEFAULT_SETTINGS.colorScheme,
   };
 }
 
