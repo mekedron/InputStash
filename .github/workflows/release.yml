@@ -166,15 +166,30 @@ jobs:
           name: chrome
           path: artifacts
 
-      - name: Locate zip
-        id: zip
+      - name: Unpack zip
         run: |
-          path=$(ls artifacts/*.zip | head -n 1)
-          if [ -z "$path" ]; then
+          set -euo pipefail
+          zip=$(ls artifacts/*.zip | head -n 1)
+          if [ -z "$zip" ]; then
             echo "No zip found in artifacts/" >&2
             exit 1
           fi
-          echo "path=$path" >> "$GITHUB_OUTPUT"
+          mkdir -p .unpacked
+          unzip -q "$zip" -d .unpacked
+          ls -la .unpacked
+
+      - name: Write CRX signing key
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CHROME_CRX_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$CRX_PRIVATE_KEY" > "$RUNNER_TEMP/cws.pem"
+
+      - name: Pack signed CRX
+        run: |
+          set -euo pipefail
+          npx --yes crx3@2 -p "$RUNNER_TEMP/cws.pem" -o "$RUNNER_TEMP/inputstash.crx" .unpacked
+          ls -la "$RUNNER_TEMP/inputstash.crx"
 
       - name: Upload and publish
         env:
@@ -182,4 +197,4 @@ jobs:
           CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-        run: npx --yes chrome-webstore-upload-cli@3 upload --source "${{ steps.zip.outputs.path }}" --auto-publish
+        run: npx --yes chrome-webstore-upload-cli@3 upload --source "$RUNNER_TEMP/inputstash.crx" --auto-publish
