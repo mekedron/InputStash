@@ -85,36 +85,209 @@ This is exactly what happened to the original listing
 
 **Just leave the field alone.**
 
-## Setting up a brand-new Chrome Web Store listing (only if ever needed)
+## Bootstrapping a fresh repo from scratch
 
-If we ever need to start over (e.g. another extension, or this one really has
-to move again), the working sequence is:
+End-to-end checklist for setting up a brand-new browser-extension repo with
+the same `git tag` → auto-publish flow. Roughly 30–45 minutes the first
+time; most of it is filling in the Chrome Web Store dashboard.
 
-1. Build a chrome zip with **no `key` field** in `manifest.json`
-   (CWS rejects `manifest.key` on first upload with `PKG_MANIFEST_KEY_NOT_EMPTY`).
-2. Create the listing via the API — CWS allocates the id:
-   ```bash
-   ACCESS_TOKEN=$(curl -s -X POST https://oauth2.googleapis.com/token \
-     -d "client_id=$CLIENT_ID" -d "client_secret=$CLIENT_SECRET" \
-     -d "refresh_token=$REFRESH_TOKEN" -d "grant_type=refresh_token" \
-     | python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])")
+Prerequisites on your machine: `gcloud`, `gh`, `op` (1Password CLI), `node`,
+`pnpm`, `python3`. All `brew install`-able.
 
-   curl -X POST \
-     -H "Authorization: Bearer $ACCESS_TOKEN" \
-     -H "x-goog-api-version: 2" \
-     -H "Content-Type: application/zip" \
-     --data-binary @./inputstash-chrome.zip \
-     "https://www.googleapis.com/upload/chromewebstore/v1.1/items"
-   ```
-   The response `id` is the new extension id. Rotate it into
-   `CHROME_EXTENSION_ID` (`gh secret set CHROME_EXTENSION_ID`).
-3. Open the new draft in the dashboard and fill in: description (≥25 chars),
-   icon, at least one screenshot, category, language, privacy practices tab
-   (data-usage certification, host-permission justification, remote-code-use
-   justification). The first auto-publish will fail until these are present.
-4. Click **Submit for review** once. After approval, all subsequent
-   `git tag` pushes auto-publish without further dashboard visits.
-5. Do **not** touch "Verified CRX uploads".
+### 1. Initialize the extension project
+
+Any extension build system works as long as it produces a Chrome zip whose
+`manifest.json` does **not** include a `key` field. With wxt:
+
+```bash
+pnpm create wxt@latest my-extension
+cd my-extension
+pnpm install
+pnpm zip   # smoke test: produces .output/<name>-<version>-chrome.zip
+```
+
+Initialize git and push to a GitHub repo (`gh repo create` or the web UI).
+
+### 2. Set up Google Cloud for the Web Store Publish API
+
+```bash
+# Pick or create the GCP project that will own the OAuth client.
+gcloud projects create my-extension-publisher        # or use an existing one
+gcloud config set project my-extension-publisher
+gcloud services enable chromewebstore.googleapis.com
+```
+
+Then in the Cloud Console (these two pages have no CLI equivalent —
+OAuth clients of type *Desktop* cannot be created via `gcloud`):
+
+1. <https://console.cloud.google.com/auth/overview?project=my-extension-publisher>
+   → configure OAuth consent screen as **External**, fill in app name +
+   support email. Skip Scopes. Add yourself under **Test users** (otherwise
+   the OAuth flow in step 3 rejects you with "Access blocked: developer
+   hasn't completed Google verification").
+2. <https://console.cloud.google.com/auth/clients/create?project=my-extension-publisher>
+   → Application type **Desktop app** → Create.
+   Copy the **Client ID** and **Client secret**.
+
+Why Desktop and not "Chrome Extension"? The Chrome Extension OAuth type is
+for browser-runtime OAuth (`chrome.identity.getAuthToken`). For headless CI
+publishing you need an installed-app refresh token, which only the Desktop
+type produces.
+
+### 3. Mint a refresh token via local OAuth loopback
+
+Save this as `mint_token.py`:
+
+```python
+#!/usr/bin/env python3
+import http.server, json, os, socket, sys, threading, urllib.parse, urllib.request, webbrowser
+
+CLIENT_ID, CLIENT_SECRET = os.environ["CWS_CLIENT_ID"], os.environ["CWS_CLIENT_SECRET"]
+SCOPE = "https://www.googleapis.com/auth/chromewebstore"
+with socket.socket() as s: s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]
+REDIRECT = f"http://127.0.0.1:{port}/callback"
+
+auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({
+    "response_type": "code", "client_id": CLIENT_ID, "redirect_uri": REDIRECT,
+    "scope": SCOPE, "access_type": "offline", "prompt": "consent",
+})
+
+got, done = {}, threading.Event()
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        got.update({k: v[0] for k, v in qs.items()})
+        self.send_response(200); self.end_headers()
+        self.wfile.write(b"OK, return to terminal.")
+        done.set()
+
+srv = http.server.HTTPServer(("127.0.0.1", port), H)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+print(auth_url, file=sys.stderr); webbrowser.open(auth_url)
+done.wait(300); srv.shutdown()
+
+resp = urllib.request.urlopen(urllib.request.Request(
+    "https://oauth2.googleapis.com/token",
+    data=urllib.parse.urlencode({
+        "code": got["code"], "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
+        "redirect_uri": REDIRECT, "grant_type": "authorization_code",
+    }).encode(),
+))
+print(f"REFRESH_TOKEN={json.load(resp)['refresh_token']}")
+```
+
+Run:
+
+```bash
+export CWS_CLIENT_ID=...     # from step 2
+export CWS_CLIENT_SECRET=...
+python3 mint_token.py
+# Approve in browser. Token prints on stdout.
+```
+
+(Optional but recommended) Store everything in 1Password:
+
+```bash
+op item create --vault MyVault --category "Secure Note" \
+  --title "Chrome Web Store OAuth Client ID" \
+  "add more.Client ID[text]=$CWS_CLIENT_ID" \
+  "add more.Client Secret[password]=$CWS_CLIENT_SECRET" \
+  "add more.Refresh Token[password]=<refresh-token-from-above>"
+```
+
+### 4. Create the Web Store listing via API
+
+Build a chrome zip with **no `key` field** in `manifest.json` (CWS rejects
+`manifest.key` on first upload with `PKG_MANIFEST_KEY_NOT_EMPTY`).
+
+```bash
+ACCESS_TOKEN=$(curl -s -X POST https://oauth2.googleapis.com/token \
+  -d "client_id=$CWS_CLIENT_ID" -d "client_secret=$CWS_CLIENT_SECRET" \
+  -d "refresh_token=$CWS_REFRESH_TOKEN" -d "grant_type=refresh_token" \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])")
+
+curl -X POST \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "x-goog-api-version: 2" \
+  -H "Content-Type: application/zip" \
+  --data-binary @./.output/my-extension-0.1.0-chrome.zip \
+  "https://www.googleapis.com/upload/chromewebstore/v1.1/items"
+```
+
+The response `id` is your new extension id. Save it — you'll need it for the
+next step.
+
+### 5. Wire up GitHub secrets
+
+```bash
+gh secret set CHROME_EXTENSION_ID  --repo OWNER/REPO --body "<id from step 4>"
+gh secret set CHROME_CLIENT_ID     --repo OWNER/REPO --body "$CWS_CLIENT_ID"
+gh secret set CHROME_CLIENT_SECRET --repo OWNER/REPO --body "$CWS_CLIENT_SECRET"
+gh secret set CHROME_REFRESH_TOKEN --repo OWNER/REPO --body "$CWS_REFRESH_TOKEN"
+```
+
+### 6. Add the release workflow
+
+Copy [`.github/workflows/release.yml`](../.github/workflows/release.yml) from
+this repo into your new repo. It assumes:
+
+- `pnpm zip` / `pnpm zip:firefox` produce chrome and firefox zips into
+  `.output/` (default for wxt).
+- A `.nvmrc` file pins the Node version.
+- Tags follow `vX.Y.Z` (or `vX.Y.Z-suffix`) format.
+
+(Optional) If you want gated GitHub Pages deploys for project docs, also
+copy [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) and
+flip Pages source to workflow-based:
+
+```bash
+gh api --method PUT repos/OWNER/REPO/pages -f 'build_type=workflow'
+```
+
+### 7. Fill out the dashboard before first publish
+
+Open <https://chrome.google.com/webstore/devconsole>, find your new draft,
+and complete:
+
+- Detailed description (≥25 characters)
+- Icon image (128×128)
+- At least one screenshot or video
+- Category
+- Language
+- Privacy practices tab: data-usage certification, host-permission
+  justification, remote-code-use justification (whichever apply)
+
+Click **Submit for review**. Google reviews the first publish manually; this
+can take a few hours to a few days.
+
+### 8. Flip the OAuth consent screen to production
+
+To avoid the [refresh token expiring after 7 days](#-refresh-token-expires-while-consent-screen-is-in-testing),
+switch the consent screen from *Testing* to **In production** at
+<https://console.cloud.google.com/auth/audience?project=my-extension-publisher>.
+For a single-developer app using only its own scope, no Google verification
+is required.
+
+### 9. Ship
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+That's the whole loop forever after.
+
+### Things never to do
+
+- **Do not enable "Verified CRX uploads"** on the listing. See the warning
+  section above — once enabled it cannot be undone and the listing is
+  bricked for API publishing.
+- **Do not put `manifest.key`** in the chrome zip you upload to CWS. It's a
+  dev-only convenience; CWS assigns the identity key itself.
+- **Do not depend on `mnao305/chrome-webstore-upload-action`** or other
+  community wrappers — they get deleted. Call `chrome-webstore-upload-cli`
+  directly via `npx`.
 
 ## Common failure modes
 
