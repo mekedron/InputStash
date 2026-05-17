@@ -74,6 +74,12 @@
     --inverse-border-soft: rgba(255, 253, 247, 0.12);
   }
 
+  /* Theme-conditional images: show the light asset by default, swap to the
+     dark asset when the dark theme is active. */
+  .theme-dark-only { display: none; }
+  :root[data-theme="dark"] .theme-light-only { display: none; }
+  :root[data-theme="dark"] .theme-dark-only { display: block; }
+
   :root[data-theme="dark"] {
     color-scheme: dark;
 
@@ -1035,7 +1041,8 @@
           <div class="ext-pill"><img src="icons/inputstash.svg" alt="" /> IS</div>
         </div>
         <div class="popup-wrap">
-          <img class="popup-image" src="images/popup-screenshot.png" alt="InputStash popup showing recovered fields from a docs.google.com form" />
+          <img class="popup-image theme-light-only" src="images/popup-screenshot.png" alt="InputStash popup showing recovered fields from a docs.google.com form" />
+          <img class="popup-image theme-dark-only" src="images/popup-screenshot-dark.png" alt="InputStash popup showing recovered fields from a docs.google.com form" />
         </div>
       </div>
       <div class="pop-callout">Click the toolbar icon — find your draft.</div>
@@ -1175,7 +1182,8 @@
       </div>
     </div>
     <div class="visual">
-      <img class="popup-shot" src="images/popup-screenshot.png" alt="InputStash popup: domain summary at the top, expanded docs.google.com panel showing recovered form fields with their latest values." />
+      <img class="popup-shot theme-light-only" src="images/popup-screenshot.png" alt="InputStash popup: domain summary at the top, expanded docs.google.com panel showing recovered form fields with their latest values." />
+      <img class="popup-shot theme-dark-only" src="images/popup-screenshot-dark.png" alt="InputStash popup: domain summary at the top, expanded docs.google.com panel showing recovered form fields with their latest values." />
     </div>
   </div>
 </section>
