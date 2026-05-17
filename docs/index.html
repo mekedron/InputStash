@@ -511,6 +511,8 @@
     color: var(--fg);
   }
   .ext-pill img { width: 14px; height: 14px; border-radius: 3px; display: block; }
+  .ext-pill-icon { padding: 4px; gap: 0; }
+  .ext-pill-icon img { width: 16px; height: 16px; }
 
   .popup-wrap {
     position: relative;
@@ -523,30 +525,38 @@
     border-radius: 12px;
     box-shadow: var(--shadow-lift), 0 0 0 1px var(--border-soft);
   }
-  /* floating callout */
-  .pop-callout {
+  /* Hand-drawn arrow that emerges from the popup screenshot, loops up over
+     the browser frame, and lands on the toolbar icon — visually tying the
+     "what you see" (popup) to the "what you click" (extension icon). */
+  .hero-arrow {
     position: absolute;
-    top: 38px;
-    right: -18px;
-    background: var(--inverse-bg);
-    color: var(--inverse-fg);
-    padding: 10px 12px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    box-shadow: var(--shadow-lift);
-    transform: rotate(2deg);
+    top: 6px;
+    right: -54px;
+    width: 188px;
+    height: 170px;
+    pointer-events: none;
+    color: var(--brand-warm);
+    overflow: visible;
+    z-index: 2;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.05));
   }
-  .pop-callout::after {
-    content: "";
-    position: absolute;
-    left: -8px;
-    top: 16px;
-    border: 6px solid transparent;
-    border-right-color: var(--inverse-bg);
+  .hero-arrow-path {
+    stroke-dasharray: 600;
+    stroke-dashoffset: 600;
+    animation: heroArrowDraw 1.6s ease-out 0.4s forwards;
+  }
+  @keyframes heroArrowDraw {
+    to { stroke-dashoffset: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-arrow-path {
+      stroke-dasharray: none;
+      stroke-dashoffset: 0;
+      animation: none;
+    }
   }
   @media (max-width: 960px) {
-    .pop-callout { right: 12px; top: 24px; }
+    .hero-arrow { right: -20px; width: 160px; height: 140px; }
   }
 
   /* ===== Section scaffolding ===== */
@@ -1040,14 +1050,25 @@
         <div class="browser-bar">
           <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
           <div class="url-pill">docs.google.com/forms</div>
-          <div class="ext-pill"><img src="icons/inputstash.svg" alt="" /> IS</div>
+          <div class="ext-pill ext-pill-icon"><img src="icons/inputstash.svg" alt="InputStash extension icon" /></div>
         </div>
         <div class="popup-wrap">
           <img class="popup-image theme-light-only" src="images/popup-screenshot.png" alt="InputStash popup showing recovered fields from a docs.google.com form" />
           <img class="popup-image theme-dark-only" src="images/popup-screenshot-dark.png" alt="InputStash popup showing recovered fields from a docs.google.com form" />
         </div>
       </div>
-      <div class="pop-callout">Click the toolbar icon — find your draft.</div>
+      <svg class="hero-arrow" viewBox="0 0 220 200" aria-hidden="true" focusable="false">
+        <defs>
+          <marker id="hero-arrowhead" viewBox="0 0 10 10" refX="7" refY="5"
+                  markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 Z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <path class="hero-arrow-path"
+              d="M 40 175 C 210 195, 245 40, 195 8 C 165 -6, 140 4, 122 18"
+              fill="none" stroke="currentColor" stroke-width="2.4"
+              stroke-linecap="round" marker-end="url(#hero-arrowhead)"/>
+      </svg>
     </div>
   </div>
 </section>
