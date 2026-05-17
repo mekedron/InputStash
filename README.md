@@ -10,9 +10,20 @@ A cross-browser extension that quietly remembers what you've typed into form fie
 
 > Built and maintained by one indie developer. If it saves you a painful retype, [☕ buy me a coffee](https://buymeacoffee.com/mekedron) — it keeps InputStash free and ad-free.
 
-## Status
+<p align="center">
+  <img src="docs/images/popup-screenshot.png" alt="InputStash popup: domain summary at the top, with an expanded panel listing recovered fields and their latest values." width="480" />
+</p>
 
-**Scaffold only.** No input-capture logic is wired up yet — the popup, content script, and background entrypoints are stubs with TODOs. The hard parts (catching input across `<input>`, `<textarea>`, `contenteditable`, shadow DOM, iframes, SPAs) are deliberately deferred to a follow-up.
+## What it does
+
+- Captures every `<input>`, `<textarea>`, and `contenteditable` field across every site you visit, debounced per-field.
+- Walks open shadow roots and re-attaches when new fields mount via `MutationObserver`, so SPAs and rich editors (Gmail, Notion, Slack, Google Docs) are covered.
+- Runs in every frame, so iframes (including cross-origin ones) are captured independently.
+- Groups captures by domain in the popup, with per-field history so you can grab an older revision of a single input.
+- Skips password fields and inputs with sensitive autocomplete tokens (`current-password`, `new-password`, `one-time-code`, `cc-number`, …) before they ever hit storage.
+- Per-domain and per-field opt-out, plus a "clear everything" button.
+- Stores everything in `browser.storage.local`. No network, no analytics, no accounts.
+- Light / dark / auto theme.
 
 ## Stack
 
@@ -23,8 +34,8 @@ A cross-browser extension that quietly remembers what you've typed into form fie
 
 ## Requirements
 
-- Node 20 LTS (a `.nvmrc` is included)
-- pnpm (`npm i -g pnpm`)
+- Node 22 LTS (a `.nvmrc` is included)
+- pnpm 11 (`npm i -g pnpm`)
 
 ## Quickstart
 
@@ -42,6 +53,8 @@ pnpm build:firefox      # → .output/firefox-mv2/
 pnpm zip                # store-ready Chromium zip
 pnpm zip:firefox        # store-ready Firefox zip
 ```
+
+Tagged pushes (`v*`) trigger the release workflow in `.github/workflows/release.yml`, which builds both zips and attaches them to a GitHub Release.
 
 ## Loading the built extension
 
@@ -89,34 +102,41 @@ Runs `svelte-check` followed by `tsc --noEmit`.
 ├── wxt.config.ts            # manifest, permissions, browser targets
 ├── tsconfig.json
 ├── entrypoints/
-│   ├── background.ts        # MV3 service worker — TODO
-│   ├── content.ts           # injected into all frames — TODO
+│   ├── background.ts        # MV3 service worker — routes capture + settings messages
+│   ├── content.ts           # injected into all frames — captures inputs, walks shadow DOM
 │   └── popup/
 │       ├── index.html
 │       ├── main.ts
-│       ├── App.svelte
+│       ├── App.svelte       # popup root: domain list, field history, settings
+│       ├── DomainPicker.svelte
 │       └── app.css
 ├── components/
-│   ├── storage.ts           # thin wrapper around browser.storage.local — TODO
-│   └── types.ts             # StashEntry
+│   ├── storage.ts           # browser.storage.local CRUD, per-origin caps, dedupe, ageing
+│   ├── pageMetadata.ts      # domain / favicon / iframe ancestry helpers
+│   ├── privacy.ts           # sensitive-field detection (passwords, OTP, cc-number, …)
+│   ├── popupUtils.ts        # grouping + display helpers used by the popup
+│   ├── textSimilarity.ts    # collapses near-identical consecutive snapshots
+│   └── types.ts             # shared TS types: settings, snapshots, history records
 ├── assets/
-│   └── icon.svg            # icon source — rasterized into public/icon/
-└── public/
-    └── icon/                # 16/32/48/96/128 PNGs used by the manifest
+│   └── icon.svg             # icon source — rasterized into public/icon/
+├── public/
+│   └── icon/                # 16/32/48/96/128 PNGs used by the manifest
+└── docs/                    # GitHub Pages landing site (https://mekedron.github.io/InputStash/)
 ```
 
-## Roadmap
+## Privacy
 
-The interesting work is still ahead. Rough order:
+- Everything lives in `browser.storage.local`, scoped per origin.
+- Password fields and inputs with sensitive `autocomplete` tokens are filtered out at the capture layer.
+- Captures are capped per origin and deduped; near-identical consecutive snapshots are collapsed.
+- Per-domain and per-field opt-out from the popup.
+- No telemetry, no network requests, no accounts.
 
-1. **Capture from regular form fields** — `input` and `change` listeners on `<input>` and `<textarea>`, debounced per element, with a stable per-field identity (form name + field name + index fallback).
-2. **`contenteditable`** — the rich-text editors that power Gmail, Notion, Slack, etc. Listen on `input` events of editable elements; serialize as text (and optionally HTML).
-3. **Shadow DOM** — walk open shadow roots when attaching listeners; re-walk on `MutationObserver` events.
-4. **SPAs** — `MutationObserver` so dynamically-mounted inputs get captured too.
-5. **Privacy guardrails** — never capture `<input type="password">`, fields with sensitive `autocomplete` tokens (`cc-number`, `one-time-code`, etc.), or content on origins the user has opted out.
-6. **Storage strategy** — `browser.storage.local`, capped at N entries per origin, dedupe consecutive snapshots, age out old entries.
-7. **Popup UI** — list grouped by origin / time, search, one-click copy, delete, clear-all, per-origin opt-out toggle.
-8. **Safari packaging** — wrap with `safari-web-extension-converter`, address any WebKit-specific quirks.
+## What's still ahead
+
+- Listings on the Chrome Web Store, Firefox Add-ons, and Edge Add-ons (in review).
+- Safari packaging via `safari-web-extension-converter`.
+- Optional encrypted export / import.
 
 ## Support the project
 
