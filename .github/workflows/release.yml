@@ -46,6 +46,7 @@ jobs:
           name: ${{ matrix.browser }}
           path: .output/*.zip
           if-no-files-found: error
+          include-hidden-files: true
 
   release:
     name: Create GitHub Release
