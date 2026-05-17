@@ -15,6 +15,7 @@
     DEFAULT_SETTINGS,
     SETTINGS_KEY,
     STATE_KEY,
+    clearAll,
     clearDomain,
     deleteFields,
     deleteRecord,
@@ -184,6 +185,14 @@
     if (!next[domain].length) delete next[domain];
 
     settings = await saveSettings({ blockedFields: next });
+  }
+
+  async function clearAllHistory(): Promise<void> {
+    if (!confirm('Clear every saved input for all domains? This cannot be undone.')) return;
+    await clearAll();
+    domainData = undefined;
+    expandedIdentity = '';
+    await refreshData(true);
   }
 
   async function clearSelectedDomain(): Promise<void> {
@@ -401,11 +410,24 @@
         </a>
       </aside>
 
-      <div class="settings-reset">
+      <div class="setting-row">
+        <span>
+          <strong>Clear all history</strong>
+          <small>Wipe every saved input across all domains.</small>
+        </span>
+        <button class="danger icon-only" type="button" aria-label="Clear all saved history" title="Clear all saved history" onclick={clearAllHistory}>
+          <Trash2 size={15} aria-hidden="true" />
+        </button>
+      </div>
+
+      <div class="setting-row">
+        <span>
+          <strong>Reset settings</strong>
+          <small>Restore defaults. Saved history stays in place.</small>
+        </span>
         <button class="danger icon-only" type="button" aria-label="Reset defaults" title="Reset defaults" onclick={resetSettingsToDefaults}>
           <RotateCcw size={15} aria-hidden="true" />
         </button>
-        <small>Saved history stays in place.</small>
       </div>
     </section>
   {:else}

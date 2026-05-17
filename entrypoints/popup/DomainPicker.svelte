@@ -207,8 +207,7 @@
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    width: 46px;
-    height: 46px;
+    aspect-ratio: 1;
     padding: 0;
     color: var(--fg);
     background: var(--surface);
