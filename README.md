@@ -95,35 +95,6 @@ pnpm compile
 
 Runs `svelte-check` followed by `tsc --noEmit`.
 
-## Project layout
-
-```
-.
-├── wxt.config.ts            # manifest, permissions, browser targets
-├── tsconfig.json
-├── entrypoints/
-│   ├── background.ts        # MV3 service worker — routes capture + settings messages
-│   ├── content.ts           # injected into all frames — captures inputs, walks shadow DOM
-│   └── popup/
-│       ├── index.html
-│       ├── main.ts
-│       ├── App.svelte       # popup root: domain list, field history, settings
-│       ├── DomainPicker.svelte
-│       └── app.css
-├── components/
-│   ├── storage.ts           # browser.storage.local CRUD, per-origin caps, dedupe, ageing
-│   ├── pageMetadata.ts      # domain / favicon / iframe ancestry helpers
-│   ├── privacy.ts           # sensitive-field detection (passwords, OTP, cc-number, …)
-│   ├── popupUtils.ts        # grouping + display helpers used by the popup
-│   ├── textSimilarity.ts    # collapses near-identical consecutive snapshots
-│   └── types.ts             # shared TS types: settings, snapshots, history records
-├── assets/
-│   └── icon.svg             # icon source — rasterized into public/icon/
-├── public/
-│   └── icon/                # 16/32/48/96/128 PNGs used by the manifest
-└── docs/                    # GitHub Pages landing site (https://mekedron.github.io/InputStash/)
-```
-
 ## Privacy
 
 - Everything lives in `browser.storage.local`, scoped per origin.
