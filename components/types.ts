@@ -90,6 +90,23 @@ export interface DomainSummary {
   parentDomains: string[];
 }
 
+export type MergedRecord = StashRecord & { fieldKey: string };
+
+export interface MergedField {
+  identity: string;
+  displayName: string;
+  inputType: string;
+  lastUpdated: number;
+  members: FieldHistory[];
+  fieldKeys: string[];
+  records: MergedRecord[];
+  recordCount: number;
+  latest?: MergedRecord;
+  pageUrl?: string;
+  pageTitle?: string;
+  allBlocked: boolean;
+}
+
 export interface CaptureMessage {
   type: 'inputstash:capture';
   snapshot: CaptureSnapshot;

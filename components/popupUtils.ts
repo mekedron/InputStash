@@ -1,5 +1,5 @@
 import { bestFieldName, normalizeColorScheme } from './storage';
-import type { FieldHistory, InputStashSettings, StashRecord } from './types';
+import type { FieldHistory, InputStashSettings, MergedField, MergedRecord, StashRecord } from './types';
 
 export function normalizePopupSettings(raw: unknown): InputStashSettings {
   const value = raw as Partial<InputStashSettings>;
@@ -45,11 +45,73 @@ export function listFields(entries: Record<string, string[]>): Array<{ domain: s
 }
 
 export function domainInitial(domain: string): string {
-  return (domain.trim()[0] || '?').toUpperCase();
+  const letters = domain.trim().replace(/^www\./, '').match(/[a-z0-9]/gi) || [];
+  return letters.slice(0, 2).join('').toUpperCase() || '?';
 }
 
-export function hideBrokenIcon(event: Event): void {
-  if (event.currentTarget instanceof HTMLImageElement) event.currentTarget.hidden = true;
+export function mergeFields(fields: FieldHistory[]): MergedField[] {
+  const buckets = new Map<string, FieldHistory[]>();
+  for (const field of fields) {
+    const identity = fieldIdentity(field);
+    const bucket = buckets.get(identity);
+    if (bucket) bucket.push(field);
+    else buckets.set(identity, [field]);
+  }
+
+  const merged: MergedField[] = [];
+  for (const [identity, members] of buckets) {
+    members.sort((a, b) => b.lastUpdated - a.lastUpdated);
+    const records: MergedRecord[] = members
+      .flatMap((m) => m.records.map((r) => ({ ...r, fieldKey: m.fieldKey })))
+      .sort((a, b) => (b.updatedAt - a.updatedAt) || (b.createdAt - a.createdAt));
+
+    const head = members[0];
+    merged.push({
+      identity,
+      displayName: bestFieldName(head),
+      inputType: head.inputType,
+      lastUpdated: head.lastUpdated,
+      members,
+      fieldKeys: members.map((m) => m.fieldKey),
+      records,
+      recordCount: records.length,
+      latest: records[0],
+      pageUrl: head.pageUrl,
+      pageTitle: head.pageTitle,
+      allBlocked: false,
+    });
+  }
+
+  return merged.sort((a, b) => b.lastUpdated - a.lastUpdated);
+}
+
+export function mergedMatchesFilter(merged: MergedField, query: string): boolean {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  return mergedSearchText(merged).includes(normalizedQuery);
+}
+
+export function mergedVisibleRecords(merged: MergedField, query: string): MergedRecord[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery || mergedMetadataText(merged).includes(normalizedQuery)) return merged.records;
+  return merged.records.filter((record) => recordSearchText(record).includes(normalizedQuery));
+}
+
+function normLabel(value: string | undefined): string {
+  return (value || '').replace(/\s+/g, ' ').replace(/[*:•·]+$/u, '').trim().toLowerCase();
+}
+
+function fieldIdentity(field: FieldHistory): string {
+  const name = normLabel(field.label) || normLabel(field.name) || normLabel(field.placeholder);
+  return name ? `named:${name}` : `anon:${field.fieldKey}`;
+}
+
+function mergedMetadataText(merged: MergedField): string {
+  return merged.members.map(metadataSearchText).join(' ');
+}
+
+function mergedSearchText(merged: MergedField): string {
+  return `${mergedMetadataText(merged)} ${merged.records.map(recordSearchText).join(' ')}`;
 }
 
 function fieldSearchText(field: FieldHistory): string {

@@ -2,21 +2,21 @@
   import { Ban, Check, Coffee, Copy, Heart, History, Monitor, Moon, RotateCcw, Settings, ShieldCheck, Sun, Trash2, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import {
-    fieldMatchesFilter,
     formatTime,
     listFields,
+    mergeFields,
+    mergedMatchesFilter,
+    mergedVisibleRecords,
     normalizePopupSettings,
     preview,
-    visibleRecords,
   } from '../../components/popupUtils';
   import DomainPicker from './DomainPicker.svelte';
   import {
     DEFAULT_SETTINGS,
     SETTINGS_KEY,
     STATE_KEY,
-    bestFieldName,
     clearDomain,
-    deleteField,
+    deleteFields,
     deleteRecord,
     domainFromUrl,
     getDomain,
@@ -25,7 +25,7 @@
     normalizeDomain,
     saveSettings,
   } from '../../components/storage';
-  import type { ColorScheme, DomainHistory, DomainSummary, FieldHistory, InputStashSettings, StashRecord } from '../../components/types';
+  import type { ColorScheme, DomainHistory, DomainSummary, InputStashSettings, MergedField, MergedRecord } from '../../components/types';
 
   type View = 'domain' | 'settings';
 
@@ -40,7 +40,7 @@
   let domainData: DomainHistory | undefined;
   let selectedDomain = '';
   let currentDomain = '';
-  let expandedFieldKey = '';
+  let expandedIdentity = '';
   let inputSearch = '';
   let isLoading = true;
   let historyLimit = 20;
@@ -50,11 +50,17 @@
   let settings: InputStashSettings = normalizePopupSettings(undefined);
 
   $: applyColorScheme(settings.colorScheme);
-  $: fields = domainData ? Object.values(domainData.fields).sort((a, b) => b.lastUpdated - a.lastUpdated) : [];
-  $: visibleFields = fields.filter((field) => fieldMatchesFilter(field, inputSearch));
+  $: merged = domainData
+    ? mergeFields(Object.values(domainData.fields)).map((m) => ({
+        ...m,
+        allBlocked:
+          m.fieldKeys.length > 0 &&
+          m.fieldKeys.every((k) => (settings.blockedFields[selectedDomain] || []).includes(k)),
+      }))
+    : [];
+  $: visibleMerged = merged.filter((m) => mergedMatchesFilter(m, inputSearch));
   $: selectedSummary = domains.find((domain) => domain.domain === selectedDomain);
   $: selectedDomainBlocked = settings.blockedDomains.includes(selectedDomain);
-  $: blockedFields = settings.blockedFields[selectedDomain] || [];
   $: blockedDomainCount = settings.blockedDomains.length;
   $: blockedFieldCount = Object.values(settings.blockedFields).reduce((count, fieldKeys) => count + fieldKeys.length, 0);
 
@@ -96,7 +102,6 @@
   async function loadDomain(domain: string): Promise<void> {
     selectedDomain = domain;
     domainData = domain ? await getDomain(domain) : undefined;
-    if (expandedFieldKey && !domainData?.fields[expandedFieldKey]) expandedFieldKey = '';
   }
 
   async function getActiveDomain(): Promise<string> {
@@ -110,7 +115,7 @@
 
   async function selectDomain(domain: string): Promise<void> {
     view = 'domain';
-    expandedFieldKey = '';
+    expandedIdentity = '';
     await loadDomain(domain);
   }
 
@@ -153,17 +158,6 @@
     settings = await saveSettings({ blockedDomains: [...blocked].sort() });
   }
 
-  async function toggleFieldBlock(fieldKey: string): Promise<void> {
-    if (!selectedDomain) return;
-    const blocked = new Set(settings.blockedFields[selectedDomain] || []);
-    if (blocked.has(fieldKey)) blocked.delete(fieldKey);
-    else blocked.add(fieldKey);
-    const nextBlockedFields = { ...settings.blockedFields };
-    if (blocked.size) nextBlockedFields[selectedDomain] = [...blocked].sort();
-    else delete nextBlockedFields[selectedDomain];
-    settings = await saveSettings({ blockedFields: nextBlockedFields });
-  }
-
   async function addBlockedDomain(): Promise<void> {
     const raw = blockedDomainInput;
     const domain = normalizeDomain(raw);
@@ -191,24 +185,29 @@
     if (!selectedDomain || !confirm(`Clear every saved input for ${selectedDomain}?`)) return;
     await clearDomain(selectedDomain);
     domainData = undefined;
-    expandedFieldKey = '';
+    expandedIdentity = '';
     await refreshData(true);
   }
 
-  async function removeField(field: FieldHistory): Promise<void> {
-    if (!selectedDomain || !confirm(`Clear "${bestFieldName(field)}"?`)) return;
-    await deleteField(selectedDomain, field.fieldKey);
-    expandedFieldKey = '';
-    await refreshData(false);
-  }
-
-  async function removeRecord(field: FieldHistory, record: StashRecord): Promise<void> {
+  async function removeField(m: MergedField): Promise<void> {
     if (!selectedDomain) return;
-    await deleteRecord(selectedDomain, field.fieldKey, record.id);
+    const message =
+      m.fieldKeys.length > 1
+        ? `Clear "${m.displayName}" (${m.fieldKeys.length} variants)?`
+        : `Clear "${m.displayName}"?`;
+    if (!confirm(message)) return;
+    await deleteFields(selectedDomain, m.fieldKeys);
+    expandedIdentity = '';
     await refreshData(false);
   }
 
-  async function copyValue(record: StashRecord): Promise<void> {
+  async function removeRecord(record: MergedRecord): Promise<void> {
+    if (!selectedDomain) return;
+    await deleteRecord(selectedDomain, record.fieldKey, record.id);
+    await refreshData(false);
+  }
+
+  async function copyValue(record: { id: string; value: string }): Promise<void> {
     await navigator.clipboard.writeText(record.value);
     copyFeedback = record.id;
     window.setTimeout(() => {
@@ -216,8 +215,22 @@
     }, 1200);
   }
 
-  function toggleField(fieldKey: string): void {
-    expandedFieldKey = expandedFieldKey === fieldKey ? '' : fieldKey;
+  function toggleIdentity(identity: string): void {
+    expandedIdentity = expandedIdentity === identity ? '' : identity;
+  }
+
+  async function toggleMergedFieldBlock(m: MergedField): Promise<void> {
+    if (!selectedDomain) return;
+    const current = new Set(settings.blockedFields[selectedDomain] || []);
+    const shouldBlock = !m.allBlocked;
+    for (const key of m.fieldKeys) {
+      if (shouldBlock) current.add(key);
+      else current.delete(key);
+    }
+    const next = { ...settings.blockedFields };
+    if (current.size) next[selectedDomain] = [...current].sort();
+    else delete next[selectedDomain];
+    settings = await saveSettings({ blockedFields: next });
   }
 
 </script>
@@ -225,7 +238,14 @@
 <main>
   <header class="mini-header">
     <button class="mini-brand" type="button" onclick={() => (view = 'domain')} aria-label="Show saved inputs">
-      <span class="mini-mark">IS</span>
+      <img
+        class="mini-mark"
+        src="/icon/48.png"
+        srcset="/icon/48.png 1x, /icon/96.png 2x, /icon/128.png 3x"
+        width="24"
+        height="24"
+        alt=""
+      />
       <span>
         <strong>InputStash</strong>
         <small>{domains.length} domains</small>
@@ -434,7 +454,7 @@
         </div>
       {/if}
 
-      {#if fields.length}
+      {#if merged.length}
         <div class="input-filter">
           <input
             aria-label="Filter inputs and history"
@@ -449,32 +469,33 @@
         </div>
       {/if}
 
-      {#if !visibleFields.length}
+      {#if !visibleMerged.length}
         <div class="empty">
-          <strong>{fields.length ? 'No matching inputs.' : 'No saved inputs here yet.'}</strong>
-          <span>{fields.length ? 'Try another label, name, id, value, or page.' : 'Type in a field on this domain, then reopen the popup.'}</span>
+          <strong>{merged.length ? 'No matching inputs.' : 'No saved inputs here yet.'}</strong>
+          <span>{merged.length ? 'Try another label, name, id, value, or page.' : 'Type in a field on this domain, then reopen the popup.'}</span>
         </div>
       {:else}
         <div class="field-list">
-          {#each visibleFields as field (field.fieldKey)}
-            {@const latest = field.records[field.records.length - 1]}
-            {@const records = visibleRecords(field, inputSearch)}
-            <article class:expanded={expandedFieldKey === field.fieldKey} class="field-card">
+          {#each visibleMerged as m (m.identity)}
+            {@const records = mergedVisibleRecords(m, inputSearch)}
+            {@const latest = m.latest}
+            {@const isExpanded = expandedIdentity === m.identity}
+            <article class:expanded={isExpanded} class="field-card">
               <div class="field-summary-row">
                 <div class="field-summary">
                   <span class="field-summary-text">
-                    <strong>{bestFieldName(field)}</strong>
-                    <small>{records.length} {records.length === 1 ? 'record' : 'records'} · {field.inputType} · {formatTime(field.lastUpdated)}</small>
+                    <strong>{m.displayName}</strong>
+                    <small>{records.length} {records.length === 1 ? 'record' : 'records'} · {m.inputType} · {formatTime(m.lastUpdated)}</small>
                   </span>
                 </div>
                 <button
                   class="icon-only field-history-toggle"
-                  class:active={expandedFieldKey === field.fieldKey}
+                  class:active={isExpanded}
                   type="button"
-                  aria-expanded={expandedFieldKey === field.fieldKey}
-                  aria-label={expandedFieldKey === field.fieldKey ? 'Hide history' : 'Show history'}
-                  title={expandedFieldKey === field.fieldKey ? 'Hide history' : 'Show history'}
-                  onclick={() => toggleField(field.fieldKey)}
+                  aria-expanded={isExpanded}
+                  aria-label={isExpanded ? 'Hide history' : 'Show history'}
+                  title={isExpanded ? 'Hide history' : 'Show history'}
+                  onclick={() => toggleIdentity(m.identity)}
                 >
                   <History size={15} aria-hidden="true" />
                 </button>
@@ -502,7 +523,7 @@
                       type="button"
                       aria-label="Clear field history"
                       title="Clear field history"
-                      onclick={() => removeField(field)}
+                      onclick={() => removeField(m)}
                     >
                       <Trash2 size={15} aria-hidden="true" />
                     </button>
@@ -510,23 +531,26 @@
                 </section>
               {/if}
 
-              {#if expandedFieldKey === field.fieldKey}
+              {#if isExpanded}
                 <div class="field-detail">
                   <dl>
-                    <div><dt>Key</dt><dd>{field.fieldKey}</dd></div>
-                    {#if field.elementId}<div><dt>Element ID</dt><dd>{field.elementId}</dd></div>{/if}
-                    {#if field.pageUrl}<div><dt>Page</dt><dd>{field.pageUrl}</dd></div>{/if}
+                    <div>
+                      <dt>{m.fieldKeys.length > 1 ? 'Keys' : 'Key'}</dt>
+                      <dd>{m.fieldKeys.join(', ')}</dd>
+                    </div>
+                    {#if m.members[0]?.elementId}<div><dt>Element ID</dt><dd>{m.members[0].elementId}</dd></div>{/if}
+                    {#if m.pageUrl}<div><dt>Page</dt><dd>{m.pageUrl}</dd></div>{/if}
                   </dl>
 
                   <div class="actions">
                     <button
                       class="icon-only"
                       type="button"
-                      aria-label={blockedFields.includes(field.fieldKey) ? 'Unblock field' : 'Block field'}
-                      title={blockedFields.includes(field.fieldKey) ? 'Unblock field' : 'Block field'}
-                      onclick={() => toggleFieldBlock(field.fieldKey)}
+                      aria-label={m.allBlocked ? 'Unblock field' : 'Block field'}
+                      title={m.allBlocked ? 'Unblock field' : 'Block field'}
+                      onclick={() => toggleMergedFieldBlock(m)}
                     >
-                      {#if blockedFields.includes(field.fieldKey)}
+                      {#if m.allBlocked}
                         <ShieldCheck size={15} aria-hidden="true" />
                       {:else}
                         <Ban size={15} aria-hidden="true" />
@@ -537,7 +561,7 @@
                       type="button"
                       aria-label="Clear field history"
                       title="Clear field history"
-                      onclick={() => removeField(field)}
+                      onclick={() => removeField(m)}
                     >
                       <Trash2 size={15} aria-hidden="true" />
                     </button>
@@ -570,7 +594,7 @@
                             type="button"
                             aria-label="Delete history item"
                             title="Delete history item"
-                            onclick={() => removeRecord(field, record)}
+                            onclick={() => removeRecord(record)}
                           >
                             <Trash2 size={15} aria-hidden="true" />
                           </button>

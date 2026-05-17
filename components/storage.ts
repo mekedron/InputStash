@@ -103,9 +103,9 @@ export async function saveCapture(
     field.name = snapshot.name || field.name;
     field.inputType = snapshot.inputType || field.inputType;
     field.selector = snapshot.selector || field.selector;
-    field.pageUrl = snapshot.url || field.pageUrl;
+    field.pageUrl = stripUrlQuery(snapshot.url) || field.pageUrl;
     field.pageTitle = snapshot.title || field.pageTitle;
-    field.topUrl = sender?.tab?.url || snapshot.topUrl || field.topUrl;
+    field.topUrl = stripUrlQuery(sender?.tab?.url || snapshot.topUrl) || field.topUrl;
     field.topTitle = sender?.tab?.title || snapshot.topTitle || field.topTitle;
 
     const latest = field.records[field.records.length - 1];
@@ -124,9 +124,9 @@ export async function saveCapture(
       latest.reason = snapshot.reason;
       latest.draft = snapshot.reason === 'input';
       latest.truncated = snapshot.truncated;
-      latest.pageUrl = snapshot.url;
+      latest.pageUrl = stripUrlQuery(snapshot.url) || latest.pageUrl;
       latest.pageTitle = snapshot.title || latest.pageTitle;
-      latest.topUrl = sender?.tab?.url || snapshot.topUrl || latest.topUrl;
+      latest.topUrl = stripUrlQuery(sender?.tab?.url || snapshot.topUrl) || latest.topUrl;
       latest.topTitle = sender?.tab?.title || snapshot.topTitle || latest.topTitle;
       latest.isFrame = snapshot.isFrame;
     } else if (latest?.value !== value) {
@@ -159,13 +159,19 @@ export async function deleteRecord(domain: string, fieldKey: string, recordId: s
 }
 
 export async function deleteField(domain: string, fieldKey: string): Promise<void> {
+  await deleteFields(domain, [fieldKey]);
+}
+
+export async function deleteFields(domain: string, fieldKeys: string[]): Promise<void> {
+  if (!fieldKeys.length) return;
   await enqueueWrite(async () => {
     const state = await getState();
-    const domainData = state.domains[normalizeDomain(domain)];
+    const domainKey = normalizeDomain(domain);
+    const domainData = state.domains[domainKey];
     if (!domainData) return;
-    delete domainData.fields[fieldKey];
+    for (const key of fieldKeys) delete domainData.fields[key];
     if (Object.keys(domainData.fields).length === 0) {
-      delete state.domains[normalizeDomain(domain)];
+      delete state.domains[domainKey];
       await setState(state);
       return;
     }
@@ -194,7 +200,7 @@ export async function clearAll(): Promise<void> {
 }
 
 export function bestFieldName(field: FieldHistory): string {
-  return field.label || field.placeholder || field.name || field.elementId || field.inputType || 'Unknown field';
+  return field.label || field.placeholder || field.name || field.elementId || 'No label';
 }
 
 export function isDomainBlocked(domain: string, settings: InputStashSettings): boolean {
@@ -225,6 +231,18 @@ export function domainFromUrl(url: string | undefined): string {
     return (parsed.hostname || parsed.protocol.replace(':', '')).toLowerCase();
   } catch {
     return '';
+  }
+}
+
+export function stripUrlQuery(url: string | undefined): string | undefined {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return url;
   }
 }
 
@@ -296,9 +314,9 @@ function ensureField(
     inputType: snapshot.inputType,
     selector: snapshot.selector,
     lastUpdated: timestamp,
-    pageUrl: snapshot.url,
+    pageUrl: stripUrlQuery(snapshot.url) || '',
     pageTitle: snapshot.title,
-    topUrl: sender?.tab?.url || snapshot.topUrl,
+    topUrl: stripUrlQuery(sender?.tab?.url || snapshot.topUrl),
     topTitle: sender?.tab?.title || snapshot.topTitle,
     records: [],
   };
@@ -319,9 +337,9 @@ function createRecord(
     sessionId: snapshot.sessionId,
     draft: snapshot.reason === 'input',
     truncated: snapshot.truncated,
-    pageUrl: snapshot.url,
+    pageUrl: stripUrlQuery(snapshot.url) || '',
     pageTitle: snapshot.title,
-    topUrl: sender?.tab?.url || snapshot.topUrl,
+    topUrl: stripUrlQuery(sender?.tab?.url || snapshot.topUrl),
     topTitle: sender?.tab?.title || snapshot.topTitle,
     isFrame: snapshot.isFrame,
   };
