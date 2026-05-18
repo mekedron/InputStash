@@ -44,12 +44,12 @@ All set on `mekedron/InputStash` → Settings → Secrets and variables → Acti
 | `CHROME_CLIENT_ID` | OAuth 2.0 desktop client id (GCP project `nikita-rabykin`) | `Chrome Web Store OAuth Client ID/Client ID` |
 | `CHROME_CLIENT_SECRET` | OAuth 2.0 client secret | `Chrome Web Store OAuth Client ID/Client Secret` |
 | `CHROME_REFRESH_TOKEN` | OAuth refresh token for the Web Store Publish API | `Chrome Web Store OAuth Client ID/add more/Refresh Token` |
-| `FIREFOX_EXTENSION_ID` | Gecko add-on id (`inputstash@rabykin.dev`); also pinned in `wxt.config.ts` | — |
+| `FIREFOX_EXTENSION_ID` | Gecko add-on id (`inputstash@mekedron.dev`); also pinned in `wxt.config.ts` | — |
 | `FIREFOX_JWT_ISSUER` | AMO API JWT issuer | `Firefox Add-on Marketplace API Key/JWT issuer` |
 | `FIREFOX_JWT_SECRET` | AMO API JWT secret | `Firefox Add-on Marketplace API Key/JWT secret` |
 
 Active Chrome listing as of this writing: `njofgcbjfefgocdngdmlegcdigcbjneh`.
-Active Firefox listing id: `inputstash@rabykin.dev`.
+Active Firefox listing id: `inputstash@mekedron.dev`.
 
 ## ⚠️ Refresh token expires while consent screen is in "Testing"
 
@@ -344,7 +344,7 @@ Setting up a fresh add-on:
 
 `wxt.config.ts` needs `browser_specific_settings.gecko.id` set to a stable
 id you control (any string of the form `<slug>@<your-domain>`). This repo
-uses `inputstash@rabykin.dev`. The id is the Firefox equivalent of the
+uses `inputstash@mekedron.dev`. The id is the Firefox equivalent of the
 auto-assigned Chrome extension id and is what `FIREFOX_EXTENSION_ID`
 points at.
 
