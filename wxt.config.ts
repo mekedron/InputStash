@@ -16,7 +16,7 @@ export default defineConfig({
       ? {
           browser_specific_settings: {
             gecko: {
-              id: 'inputstash@mekedron.dev',
+              id: 'inputstash@rabykin.dev',
               data_collection_permissions: { required: ['none'] },
             },
           },

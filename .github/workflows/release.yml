@@ -160,6 +160,21 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Download Chrome artifact
         uses: actions/download-artifact@v4
         with:
@@ -169,17 +184,63 @@ jobs:
       - name: Locate zip
         id: zip
         run: |
-          path=$(ls artifacts/*.zip | head -n 1)
+          path=$(ls artifacts/*-chrome.zip | head -n 1)
           if [ -z "$path" ]; then
-            echo "No zip found in artifacts/" >&2
+            echo "No chrome zip found in artifacts/" >&2
             exit 1
           fi
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
-      - name: Upload and publish
+      - name: Submit to Chrome Web Store
         env:
-          EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
-          CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-        run: npx --yes chrome-webstore-upload-cli@3 upload --source "${{ steps.zip.outputs.path }}" --auto-publish
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: pnpm wxt submit --chrome-zip "${{ steps.zip.outputs.path }}"
+
+  publish-firefox:
+    name: Publish to Firefox Add-ons
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download Firefox artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firefox
+          path: artifacts
+
+      - name: Locate zips
+        id: zip
+        run: |
+          firefox=$(ls artifacts/*-firefox.zip | head -n 1)
+          sources=$(ls artifacts/*-sources.zip | head -n 1)
+          if [ -z "$firefox" ] || [ -z "$sources" ]; then
+            echo "Missing firefox or sources zip in artifacts/" >&2
+            ls -la artifacts/ >&2
+            exit 1
+          fi
+          echo "firefox=$firefox" >> "$GITHUB_OUTPUT"
+          echo "sources=$sources" >> "$GITHUB_OUTPUT"
+
+      - name: Submit to Firefox Add-ons
+        env:
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+        run: pnpm wxt submit --firefox-zip "${{ steps.zip.outputs.firefox }}" --firefox-sources-zip "${{ steps.zip.outputs.sources }}"
