@@ -12,6 +12,9 @@ A cross-browser extension that quietly remembers what you've typed into form fie
   <a href="https://chromewebstore.google.com/detail/njofgcbjfefgocdngdmlegcdigcbjneh">
     <img src="docs/images/chrome-web-store-badge.png" alt="Available in the Chrome Web Store" height="58" />
   </a>
+  <a href="https://addons.mozilla.org/en-US/firefox/addon/inputstash/">
+    <img src="docs/images/firefox-add-ons-badge.png" alt="Get the add-on for Firefox" height="58" />
+  </a>
 </p>
 
 > Built and maintained by one indie developer. If it saves you a painful retype, [☕ buy me a coffee](https://buymeacoffee.com/mekedron) — it keeps InputStash free and ad-free.
