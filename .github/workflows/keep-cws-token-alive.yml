@@ -1,0 +1,52 @@
+# Google expires OAuth refresh tokens that go unused for 6 months and may
+# delete inactive OAuth clients on the same schedule. Exercising the token
+# twice a month keeps the publish pipeline alive between releases and turns
+# a silent expiry into a failed-workflow email within days.
+#
+# If this workflow fails with invalid_grant, re-mint the token:
+#   1. In Google Cloud console (project nikita-rabykin), client
+#      "Chrome Web Store Publisher": add/rotate a client secret if lost.
+#   2. Run the OAuth consent flow with scope
+#      https://www.googleapis.com/auth/chromewebstore, access_type=offline,
+#      prompt=consent (e.g. `pnpm wxt submit init`), while the OAuth consent
+#      screen is In production — tokens minted in Testing die after 7 days.
+#   3. gh secret set CHROME_REFRESH_TOKEN (and CHROME_CLIENT_SECRET if rotated).
+name: Keep CWS token alive
+
+on:
+  schedule:
+    - cron: '23 6 1,15 * *'
+  workflow_dispatch:
+
+jobs:
+  refresh-check:
+    name: Exercise Chrome Web Store refresh token
+    runs-on: ubuntu-latest
+    steps:
+      - name: Exchange refresh token and ping CWS API
+        env:
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+        run: |
+          set -euo pipefail
+          response=$(curl -sS https://oauth2.googleapis.com/token \
+            -d client_id="$CHROME_CLIENT_ID" \
+            -d client_secret="$CHROME_CLIENT_SECRET" \
+            -d refresh_token="$CHROME_REFRESH_TOKEN" \
+            -d grant_type=refresh_token)
+          access_token=$(jq -r '.access_token // empty' <<<"$response")
+          if [ -z "$access_token" ]; then
+            echo "::error::Refresh token exchange failed: $(jq -c 'del(.access_token)' <<<"$response")"
+            echo "Re-mint the token per the header comment in this workflow file."
+            exit 1
+          fi
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $access_token" \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/$CHROME_EXTENSION_ID?projection=DRAFT")
+          if [ "$status" != "200" ]; then
+            echo "::error::Chrome Web Store API check failed with HTTP $status"
+            exit 1
+          fi
+          echo "Refresh token healthy; CWS API reachable (HTTP $status)."
