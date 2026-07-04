@@ -5,21 +5,39 @@ type PageMetadata = Omit<
   'capturedAt' | 'domain' | 'fieldKey' | 'inputType' | 'reason' | 'sessionId' | 'truncated' | 'value'
 >;
 
-export function getPageMetadata(): PageMetadata {
-  const ancestors = ancestorDomains();
-  const referrerDomain = metadataDomainFromUrl(document.referrer);
+interface FrameConstants {
+  ancestorDomains: string[];
+  referrerDomain: string;
+  isFrame: boolean;
+}
+
+// Referrer, ancestor origins and frame-ness cannot change for the lifetime of
+// a document, so they are computed once instead of on every capture.
+let frameConstants: FrameConstants | undefined;
+
+function getFrameConstants(): FrameConstants {
+  frameConstants ??= {
+    ancestorDomains: ancestorDomains(),
+    referrerDomain: metadataDomainFromUrl(document.referrer),
+    isFrame: isFrame(),
+  };
+  return frameConstants;
+}
+
+export function getPageMetadata(cachedFaviconUrl?: string): PageMetadata {
+  const { ancestorDomains: ancestors, referrerDomain, isFrame } = getFrameConstants();
   const top = readableTopPage();
 
   return {
     url: location.href,
     title: document.title,
-    faviconUrl: findFaviconUrl(),
+    faviconUrl: cachedFaviconUrl ?? findFaviconUrl(),
     topDomain: top.domain || ancestors[ancestors.length - 1] || referrerDomain,
     topUrl: top.url,
     topTitle: top.title,
     ancestorDomains: ancestors,
     referrerDomain,
-    isFrame: isFrame(),
+    isFrame,
   };
 }
 
@@ -66,7 +84,7 @@ function isFrame(): boolean {
   }
 }
 
-function findFaviconUrl(): string | undefined {
+export function findFaviconUrl(): string | undefined {
   const selectors = [
     'link[rel~="icon"][href]',
     'link[rel="shortcut icon"][href]',

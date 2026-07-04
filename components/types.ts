@@ -116,4 +116,9 @@ export interface GetSettingsMessage {
   type: 'inputstash:get-settings';
 }
 
-export type InputStashMessage = CaptureMessage | GetSettingsMessage;
+export interface SettingsUpdatedMessage {
+  type: 'inputstash:settings-updated';
+  settings: InputStashSettings;
+}
+
+export type InputStashMessage = CaptureMessage | GetSettingsMessage | SettingsUpdatedMessage;

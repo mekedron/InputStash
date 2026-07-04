@@ -14,7 +14,6 @@
   import {
     DEFAULT_SETTINGS,
     SETTINGS_KEY,
-    STATE_KEY,
     clearAll,
     clearDomain,
     deleteFields,
@@ -22,6 +21,7 @@
     domainFromUrl,
     getDomain,
     getSettings,
+    isStashDataKey,
     listDomainSummaries,
     normalizeDomain,
     saveSettings,
@@ -80,7 +80,7 @@
         historyLimit = settings.historyLimit;
         identityThreshold = settings.identityThreshold;
       }
-      if (changes[STATE_KEY]) void refreshData(false);
+      if (Object.keys(changes).some(isStashDataKey)) void refreshData(false);
     };
 
     browser.storage.onChanged.addListener(listener);

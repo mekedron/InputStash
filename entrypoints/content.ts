@@ -1,10 +1,10 @@
-import { getPageMetadata, metadataDomainFromUrl, normalizeMetadataDomain } from '../components/pageMetadata';
+import { findFaviconUrl, getPageMetadata, metadataDomainFromUrl, normalizeMetadataDomain } from '../components/pageMetadata';
 import { hasSensitiveAutocomplete, looksSensitiveFieldText } from '../components/privacy';
-import type { CaptureReason, CaptureSnapshot, InputStashSettings } from '../components/types';
+import type { CaptureReason, CaptureSnapshot, InputStashSettings, SettingsUpdatedMessage } from '../components/types';
 
 const SETTINGS_KEY = 'inputstash:settings:v1';
-const DEBOUNCE_MS = 100;
-const SHADOW_SCAN_MS = 5000;
+const SETTINGS_UPDATED_MESSAGE: SettingsUpdatedMessage['type'] = 'inputstash:settings-updated';
+const DEBOUNCE_MS = 300;
 const MAX_VALUE_CHARS = 50000;
 
 const DEFAULT_SETTINGS: InputStashSettings = {
@@ -15,12 +15,28 @@ const DEFAULT_SETTINGS: InputStashSettings = {
   colorScheme: 'auto',
 };
 
+// Everything derived from the DOM around a field (labels, selector paths,
+// sensitivity checks) is stable while the user keeps editing it, so it is
+// computed once per session instead of on every debounced capture.
+interface FieldDescriptor {
+  fieldKey: string;
+  elementId?: string;
+  label?: string;
+  placeholder?: string;
+  name?: string;
+  inputType: string;
+  selector: string;
+  sensitive: boolean;
+  faviconUrl?: string;
+}
+
 interface ElementSession {
   sessionId: string;
   timer?: number;
   finalized: boolean;
   lastReason?: CaptureReason;
   lastValue?: string;
+  descriptor?: FieldDescriptor;
 }
 
 type EditableElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLElement;
@@ -37,64 +53,65 @@ export default defineContentScript({
   noScriptStartedPostMessage: true,
   main(ctx) {
     const sessions = new WeakMap<Element, ElementSession>();
-    const observedRoots = new WeakSet<Document | ShadowRoot>();
-    const observers: MutationObserver[] = [];
+    const observedShadowRoots = new WeakSet<ShadowRoot>();
     const cleanup: Array<() => void> = [];
     let settings = DEFAULT_SETTINGS;
 
     void refreshSettings();
 
-    const settingsListener = (changes: Record<string, { newValue?: unknown }>, area: string) => {
-      if (area !== 'local' || !changes[SETTINGS_KEY]?.newValue) return;
-      settings = normalizeSettings(changes[SETTINGS_KEY].newValue);
+    // No storage.onChanged listener here on purpose: the browser delivers
+    // those events (including old and new values of every changed key) to
+    // every listening frame, which made all open tabs pay for every capture
+    // write. Settings arrive as a push message from the popup instead.
+    const messageListener = (message: unknown): undefined => {
+      const typed = message as Partial<SettingsUpdatedMessage> | null;
+      if (typed?.type === SETTINGS_UPDATED_MESSAGE) settings = normalizeSettings(typed.settings);
+      return undefined;
     };
+    browser.runtime.onMessage.addListener(messageListener);
+    cleanup.push(() => browser.runtime.onMessage.removeListener(messageListener));
 
-    browser.storage.onChanged.addListener(settingsListener);
-    cleanup.push(() => browser.storage.onChanged.removeListener(settingsListener));
+    attachRootListeners(document);
 
-    observeRoot(document);
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => scanNode(document), { once: true });
-    } else {
-      scanNode(document);
-    }
-
-    const shadowInterval = window.setInterval(() => scanNode(document), SHADOW_SCAN_MS);
-    cleanup.push(() => window.clearInterval(shadowInterval));
+    const flushListener = () => flushPendingCapture();
+    window.addEventListener('pagehide', flushListener, true);
+    cleanup.push(() => window.removeEventListener('pagehide', flushListener, true));
 
     ctx.onInvalidated(() => {
-      for (const observer of observers) observer.disconnect();
       for (const remove of cleanup) remove();
     });
 
-    function observeRoot(root: Document | ShadowRoot): void {
-      if (observedRoots.has(root)) return;
-      observedRoots.add(root);
-
-      root.addEventListener('input', handleInput, true);
+    // input/focusin/blur are composed events: they cross open shadow DOM
+    // boundaries and reach the document-level capture listeners. change and
+    // submit are not composed, so those two are attached to each shadow root
+    // discovered via composedPath() the first time the user interacts with
+    // it. This replaces the old MutationObserver + periodic TreeWalker scan,
+    // which walked the whole DOM of every page looking for shadow roots.
+    function attachRootListeners(root: Document | ShadowRoot): void {
       root.addEventListener('change', handleChange, true);
-      root.addEventListener('focusin', handleFocusIn, true);
-      root.addEventListener('blur', handleBlur, true);
       root.addEventListener('submit', handleSubmit, true);
 
-      cleanup.push(() => {
-        root.removeEventListener('input', handleInput, true);
-        root.removeEventListener('change', handleChange, true);
-        root.removeEventListener('focusin', handleFocusIn, true);
-        root.removeEventListener('blur', handleBlur, true);
-        root.removeEventListener('submit', handleSubmit, true);
-      });
+      if (root === document) {
+        root.addEventListener('input', handleInput, true);
+        root.addEventListener('focusin', handleFocusIn, true);
+        root.addEventListener('blur', handleBlur, true);
+        cleanup.push(() => {
+          root.removeEventListener('change', handleChange, true);
+          root.removeEventListener('submit', handleSubmit, true);
+          root.removeEventListener('input', handleInput, true);
+          root.removeEventListener('focusin', handleFocusIn, true);
+          root.removeEventListener('blur', handleBlur, true);
+        });
+      }
+      // Shadow root listeners are not registered for cleanup: keeping strong
+      // references to them would leak removed components, and the handlers
+      // are inert once ctx is invalidated.
+    }
 
-      const observer = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          for (const node of mutation.addedNodes) scanNode(node);
-        }
-      });
-
-      observer.observe(root, { childList: true, subtree: true });
-      observers.push(observer);
-      scanNode(root);
+    function discoverShadowRoot(root: ShadowRoot): void {
+      if (observedShadowRoots.has(root)) return;
+      observedShadowRoots.add(root);
+      attachRootListeners(root);
     }
 
     function handleFocusIn(event: Event): void {
@@ -129,20 +146,50 @@ export default defineContentScript({
     }
 
     function queueCapture(target: EditableElement, reason: CaptureReason, delay: number): void {
+      if (!ctx.isValid) return;
       const session = getSession(target, reason);
-      if (session.timer) window.clearTimeout(session.timer);
+      if (session.timer) {
+        window.clearTimeout(session.timer);
+        session.timer = undefined;
+      }
+
+      if (delay <= 0) {
+        // Immediate reasons (change/blur/submit) capture synchronously, while
+        // the value is still present — apps often clear fields right after
+        // handling their own submit.
+        capture(target, session, reason);
+        return;
+      }
 
       session.timer = window.setTimeout(() => {
         session.timer = undefined;
-        const snapshot = createSnapshot(target, reason, session.sessionId);
-        if (!snapshot) return;
-
-        const shouldSend = session.lastValue !== snapshot.value || session.lastReason !== reason;
-        session.lastValue = snapshot.value;
-        session.lastReason = reason;
-        if (reason !== 'input') session.finalized = true;
-        if (shouldSend) void sendSnapshot(snapshot);
+        capture(target, session, reason);
       }, delay);
+    }
+
+    function capture(target: EditableElement, session: ElementSession, reason: CaptureReason): void {
+      const snapshot = createSnapshot(target, reason, session);
+      if (!snapshot) return;
+
+      const shouldSend = session.lastValue !== snapshot.value || session.lastReason !== reason;
+      session.lastValue = snapshot.value;
+      session.lastReason = reason;
+      if (reason !== 'input') session.finalized = true;
+      if (shouldSend) void sendSnapshot(snapshot);
+    }
+
+    // Tab closes and navigations flush the pending debounced capture so the
+    // last keystrokes before leaving are not lost.
+    function flushPendingCapture(): void {
+      if (!ctx.isValid) return;
+      const active = getDeepActiveElement();
+      const target = active ? editableFromElement(active) : undefined;
+      if (!target) return;
+      const session = sessions.get(target);
+      if (!session?.timer) return;
+      window.clearTimeout(session.timer);
+      session.timer = undefined;
+      capture(target, session, 'blur');
     }
 
     function getSession(target: Element, reason: CaptureReason): ElementSession {
@@ -156,7 +203,7 @@ export default defineContentScript({
     function createSnapshot(
       target: EditableElement,
       reason: CaptureReason,
-      sessionId: string,
+      session: ElementSession,
     ): CaptureSnapshot | undefined {
       const valueResult = readValue(target);
       if (!valueResult.value.trim()) return undefined;
@@ -164,28 +211,24 @@ export default defineContentScript({
       const domain = effectiveDomain();
       if (!domain || isBlockedDomain(domain, settings)) return undefined;
 
-      const fieldKey = getFieldKey(target);
-      if (isBlockedField(domain, fieldKey, settings)) return undefined;
-      if (isHardSensitiveTarget(target)) return undefined;
-      if (isSoftSensitiveTarget(target)) return undefined;
-
-      const label = getElementLabel(target);
-      const metadata = getPageMetadata();
+      const descriptor = (session.descriptor ||= buildFieldDescriptor(target));
+      if (descriptor.sensitive) return undefined;
+      if (isBlockedField(domain, descriptor.fieldKey, settings)) return undefined;
 
       return {
-        ...metadata,
+        ...getPageMetadata(descriptor.faviconUrl),
         domain,
-        fieldKey,
-        elementId: target.id || undefined,
-        label,
-        placeholder: 'placeholder' in target ? cleanText(target.placeholder) : undefined,
-        name: 'name' in target ? cleanText(target.name) : undefined,
-        inputType: getInputType(target),
-        selector: getElementPath(target),
+        fieldKey: descriptor.fieldKey,
+        elementId: descriptor.elementId,
+        label: descriptor.label,
+        placeholder: descriptor.placeholder,
+        name: descriptor.name,
+        inputType: descriptor.inputType,
+        selector: descriptor.selector,
         value: valueResult.value,
         truncated: valueResult.truncated,
         reason,
-        sessionId,
+        sessionId: session.sessionId,
         capturedAt: Date.now(),
       };
     }
@@ -200,45 +243,40 @@ export default defineContentScript({
 
     async function refreshSettings(): Promise<void> {
       try {
-        const response = await browser.runtime.sendMessage({ type: 'inputstash:get-settings' });
-        settings = normalizeSettings(response?.settings);
+        const raw = await browser.storage.local.get(SETTINGS_KEY);
+        if (raw[SETTINGS_KEY]) settings = normalizeSettings(raw[SETTINGS_KEY]);
       } catch {
         settings = DEFAULT_SETTINGS;
       }
     }
 
-    function scanNode(node: Node): void {
-      if (node instanceof Element && node.shadowRoot) observeRoot(node.shadowRoot);
-      if (!(node instanceof Element || node instanceof Document || node instanceof ShadowRoot)) return;
-
-      const walker = document.createTreeWalker(node, NodeFilter.SHOW_ELEMENT);
-      while (walker.nextNode()) {
-        const element = walker.currentNode;
-        if (element instanceof Element && element.shadowRoot) observeRoot(element.shadowRoot);
-      }
-    }
-
     function findEditableTarget(event: Event): EditableElement | undefined {
+      let found: EditableElement | undefined;
       for (const item of event.composedPath()) {
-        if (item instanceof Element) {
-          const target = editableFromElement(item);
-          if (target) return target;
+        if (item instanceof ShadowRoot) {
+          discoverShadowRoot(item);
+        } else if (!found && item instanceof Element) {
+          found = editableFromElement(item);
         }
       }
+      if (found) return found;
       return event.target instanceof Element ? editableFromElement(event.target) : undefined;
     }
   },
 });
 
 function editableFromElement(element: Element): EditableElement | undefined {
-  if (element instanceof HTMLInputElement && isSupportedInput(element)) return element;
+  if (element instanceof HTMLInputElement) return isSupportedInput(element) ? element : undefined;
   if (element instanceof HTMLTextAreaElement) return element;
   if (element instanceof HTMLSelectElement) return element;
 
-  if (element instanceof HTMLElement && element.isContentEditable) {
-    return closestEditableRoot(element);
+  if (element instanceof HTMLElement) {
+    // isContentEditable is inherited, so a false here means the element is
+    // not inside an editable region either — no need for a closest() lookup.
+    return element.isContentEditable ? closestEditableRoot(element) : undefined;
   }
 
+  // Non-HTML elements (SVG/MathML) can still sit inside an editable region.
   const editable = element.closest('[contenteditable="true"], [contenteditable="plaintext-only"], [contenteditable=""]');
   return editable instanceof HTMLElement ? editable : undefined;
 }
@@ -270,6 +308,21 @@ function closestEditableRoot(element: HTMLElement): HTMLElement {
   return root;
 }
 
+function buildFieldDescriptor(target: EditableElement): FieldDescriptor {
+  const label = getElementLabel(target);
+  return {
+    fieldKey: getFieldKey(target, label),
+    elementId: target.id || undefined,
+    label,
+    placeholder: 'placeholder' in target ? cleanText(target.placeholder) : undefined,
+    name: 'name' in target ? cleanText(target.name) : undefined,
+    inputType: getInputType(target),
+    selector: getElementPath(target),
+    sensitive: isHardSensitiveTarget(target) || isSoftSensitiveTarget(target, label),
+    faviconUrl: findFaviconUrl(),
+  };
+}
+
 function readValue(target: EditableElement): { value: string; truncated: boolean } {
   const raw =
     target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
@@ -299,9 +352,9 @@ function isHardSensitiveTarget(target: EditableElement): boolean {
   return hasSensitiveAutocomplete(autocomplete);
 }
 
-function isSoftSensitiveTarget(target: EditableElement): boolean {
+function isSoftSensitiveTarget(target: EditableElement, label: string | undefined): boolean {
   const searchableText = [
-    getElementLabel(target),
+    label,
     target.id,
     target.getAttribute('aria-label'),
     target.getAttribute('data-testid'),
@@ -314,11 +367,10 @@ function isSoftSensitiveTarget(target: EditableElement): boolean {
   return looksSensitiveFieldText(searchableText);
 }
 
-function getFieldKey(target: EditableElement): string {
+function getFieldKey(target: EditableElement, label: string | undefined): string {
   if (target.id) return limitKey(`id:${target.id}`);
 
   const name = 'name' in target ? cleanText(target.name) : '';
-  const label = getElementLabel(target);
   const form = 'form' in target ? target.form : undefined;
   const formPart = form ? form.id || form.getAttribute('name') || getElementPath(form) : '';
 
@@ -394,8 +446,12 @@ function getDeepActiveElement(): Element | undefined {
   return active || undefined;
 }
 
+let cachedEffectiveDomain: string | undefined;
+
 function effectiveDomain(): string {
-  return metadataDomainFromUrl(location.href) || metadataDomainFromUrl(document.referrer) || location.protocol.replace(':', '');
+  cachedEffectiveDomain ??=
+    metadataDomainFromUrl(location.href) || metadataDomainFromUrl(document.referrer) || location.protocol.replace(':', '');
+  return cachedEffectiveDomain;
 }
 
 function createSession(): ElementSession {

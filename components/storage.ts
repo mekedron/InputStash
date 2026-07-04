@@ -10,8 +10,16 @@ import type {
 } from './types';
 import { shouldUpdateExistingValue } from './textSimilarity';
 
-export const STATE_KEY = 'inputstash:domains:v1';
+// Legacy v1 layout kept the whole stash under one key. Every capture rewrote
+// the full blob and storage.onChanged then delivered old+new copies of it to
+// every listening context, which made typing lag grow with stash size. The v2
+// layout keeps one key per domain plus a small index for summaries so each
+// capture only touches data for the domain being typed on.
+const LEGACY_STATE_KEY = 'inputstash:domains:v1';
+export const INDEX_KEY = 'inputstash:index:v2';
+export const DOMAIN_KEY_PREFIX = 'inputstash:domain:v2:';
 export const SETTINGS_KEY = 'inputstash:settings:v1';
+export const SETTINGS_UPDATED_MESSAGE = 'inputstash:settings-updated';
 export const DEFAULT_HISTORY_LIMIT = 20;
 export const DEFAULT_IDENTITY_THRESHOLD = 50;
 export const DEFAULT_COLOR_SCHEME: ColorScheme = 'auto';
@@ -30,9 +38,23 @@ export function normalizeColorScheme(value: unknown): ColorScheme {
   return COLOR_SCHEMES.includes(value as ColorScheme) ? (value as ColorScheme) : DEFAULT_COLOR_SCHEME;
 }
 
-const EMPTY_STATE: StashState = { domains: {} };
+export function isStashDataKey(key: string): boolean {
+  return key === INDEX_KEY || key === LEGACY_STATE_KEY || key.startsWith(DOMAIN_KEY_PREFIX);
+}
+
+interface StoredDomain {
+  domain: string;
+  faviconUrl?: string;
+  lastUpdated: number;
+  fields: Record<string, FieldHistory>;
+}
+
+interface StashIndex {
+  domains: Record<string, DomainSummary>;
+}
 
 let writeQueue: Promise<void> = Promise.resolve();
+let migrationPromise: Promise<void> | undefined;
 
 export async function getSettings(): Promise<InputStashSettings> {
   const raw = await browser.storage.local.get(SETTINGS_KEY);
@@ -43,32 +65,56 @@ export async function saveSettings(settings: Partial<InputStashSettings>): Promi
   const current = await getSettings();
   const next = normalizeSettings({ ...current, ...settings });
   await browser.storage.local.set({ [SETTINGS_KEY]: next });
+  void broadcastSettingsUpdate(next);
   return next;
 }
 
+// Content scripts intentionally have no storage.onChanged listener (see the
+// v2 layout note above), so settings changes are pushed to open tabs instead.
+async function broadcastSettingsUpdate(settings: InputStashSettings): Promise<void> {
+  try {
+    if (!browser.tabs?.query) return;
+    const tabs = await browser.tabs.query({});
+    await Promise.allSettled(
+      tabs.map((tab) =>
+        tab.id === undefined
+          ? Promise.resolve()
+          : browser.tabs.sendMessage(tab.id, { type: SETTINGS_UPDATED_MESSAGE, settings }),
+      ),
+    );
+  } catch {
+    // Tabs without the content script (chrome://, store pages) reject; new
+    // page loads fetch fresh settings anyway.
+  }
+}
+
 export async function listDomainSummaries(): Promise<DomainSummary[]> {
-  const state = await getState();
-  return Object.values(state.domains)
-    .map((domain) => {
-      const fields = Object.values(domain.fields);
-      return {
-        domain: domain.domain,
-        faviconUrl: domain.faviconUrl,
-        lastUpdated: domain.lastUpdated,
-        fieldCount: fields.length,
-        recordCount: fields.reduce((sum, field) => sum + field.records.length, 0),
-        iframeDomains: [...domain.iframeDomains].sort(),
-        parentDomains: [...domain.parentDomains].sort(),
-      };
-    })
+  await migrateIfNeeded();
+  const index = await getIndex();
+  return Object.values(index.domains)
+    .map(normalizeSummary)
     .sort((left, right) => right.lastUpdated - left.lastUpdated);
 }
 
 export async function getDomain(domain: string): Promise<DomainHistory | undefined> {
-  const state = await getState();
+  await migrateIfNeeded();
   const normalizedDomain = normalizeDomain(domain);
-  const domainData = state.domains[normalizedDomain];
-  return domainData ? cloneDomain(domainData) : undefined;
+  if (!normalizedDomain) return undefined;
+
+  const key = domainKey(normalizedDomain);
+  const raw = await browser.storage.local.get([key, INDEX_KEY]);
+  const entry = normalizeIndex(raw[INDEX_KEY]).domains[normalizedDomain];
+  const stored = raw[key] ? normalizeStoredDomain(raw[key], normalizedDomain) : undefined;
+  if (!stored && !entry) return undefined;
+
+  return {
+    domain: normalizedDomain,
+    faviconUrl: stored?.faviconUrl || entry?.faviconUrl,
+    lastUpdated: stored?.lastUpdated || entry?.lastUpdated || 0,
+    iframeDomains: [...(entry?.iframeDomains || [])],
+    parentDomains: [...(entry?.parentDomains || [])],
+    fields: stored?.fields || {},
+  };
 }
 
 export async function saveCapture(
@@ -76,6 +122,7 @@ export async function saveCapture(
   sender?: { tab?: { favIconUrl?: string; title?: string; url?: string }; url?: string },
 ): Promise<void> {
   await enqueueWrite(async () => {
+    await migrateIfNeeded();
     const settings = await getSettings();
     const domain = normalizeDomain(snapshot.domain);
     const topDomain = normalizeDomain(
@@ -89,13 +136,16 @@ export async function saveCapture(
     const value = snapshot.value;
     if (!value) return;
 
-    const state = await getState();
+    const key = domainKey(domain);
+    const raw = await browser.storage.local.get([key, INDEX_KEY]);
+    const stored = normalizeStoredDomain(raw[key], domain);
+    const index = normalizeIndex(raw[INDEX_KEY]);
     const now = snapshot.capturedAt || Date.now();
-    const domainData = ensureDomain(state, domain, now);
-    const field = ensureField(domainData, snapshot, sender, now);
 
-    domainData.lastUpdated = now;
-    domainData.faviconUrl = snapshot.faviconUrl || sender?.tab?.favIconUrl || domainData.faviconUrl;
+    stored.lastUpdated = now;
+    stored.faviconUrl = snapshot.faviconUrl || sender?.tab?.favIconUrl || stored.faviconUrl;
+
+    const field = ensureField(stored, snapshot, sender, now);
     field.lastUpdated = now;
     field.elementId = snapshot.elementId || field.elementId;
     field.label = snapshot.label || field.label;
@@ -134,27 +184,33 @@ export async function saveCapture(
     }
 
     applyHistoryLimit(field, settings.historyLimit);
-    updateFrameRelations(state, domain, topDomain, snapshot, now);
 
-    await setState(state);
+    const previous = index.domains[domain];
+    index.domains[domain] = summarizeStored(stored, previous?.iframeDomains || [], previous?.parentDomains || []);
+    updateFrameRelations(index, domain, topDomain, snapshot, now);
+
+    await browser.storage.local.set({ [key]: stored, [INDEX_KEY]: index });
   });
 }
 
 export async function deleteRecord(domain: string, fieldKey: string, recordId: string): Promise<void> {
   await enqueueWrite(async () => {
-    const state = await getState();
-    const domainKey = normalizeDomain(domain);
-    const domainData = state.domains[domainKey];
-    const field = domainData?.fields[fieldKey];
+    await migrateIfNeeded();
+    const domainName = normalizeDomain(domain);
+    const key = domainKey(domainName);
+    const raw = await browser.storage.local.get([key, INDEX_KEY]);
+    if (!raw[key]) return;
+
+    const stored = normalizeStoredDomain(raw[key], domainName);
+    const field = stored.fields[fieldKey];
     if (!field) return;
+
     field.records = field.records.filter((record) => record.id !== recordId);
     if (field.records.length === 0) {
-      delete domainData.fields[fieldKey];
+      delete stored.fields[fieldKey];
     }
-    if (domainData && Object.keys(domainData.fields).length === 0) {
-      delete state.domains[domainKey];
-    }
-    await setState(state);
+
+    await writeStoredDomain(domainName, stored, normalizeIndex(raw[INDEX_KEY]), false);
   });
 }
 
@@ -165,37 +221,43 @@ export async function deleteField(domain: string, fieldKey: string): Promise<voi
 export async function deleteFields(domain: string, fieldKeys: string[]): Promise<void> {
   if (!fieldKeys.length) return;
   await enqueueWrite(async () => {
-    const state = await getState();
-    const domainKey = normalizeDomain(domain);
-    const domainData = state.domains[domainKey];
-    if (!domainData) return;
-    for (const key of fieldKeys) delete domainData.fields[key];
-    if (Object.keys(domainData.fields).length === 0) {
-      delete state.domains[domainKey];
-      await setState(state);
-      return;
-    }
-    domainData.lastUpdated = newestFieldTime(domainData);
-    await setState(state);
+    await migrateIfNeeded();
+    const domainName = normalizeDomain(domain);
+    const key = domainKey(domainName);
+    const raw = await browser.storage.local.get([key, INDEX_KEY]);
+    if (!raw[key]) return;
+
+    const stored = normalizeStoredDomain(raw[key], domainName);
+    for (const fieldKey of fieldKeys) delete stored.fields[fieldKey];
+    stored.lastUpdated = newestFieldTime(stored);
+
+    await writeStoredDomain(domainName, stored, normalizeIndex(raw[INDEX_KEY]), true);
   });
 }
 
 export async function clearDomain(domain: string): Promise<void> {
   await enqueueWrite(async () => {
-    const state = await getState();
-    delete state.domains[normalizeDomain(domain)];
+    await migrateIfNeeded();
     const normalized = normalizeDomain(domain);
-    for (const domainData of Object.values(state.domains)) {
-      domainData.iframeDomains = domainData.iframeDomains.filter((item) => item !== normalized);
-      domainData.parentDomains = domainData.parentDomains.filter((item) => item !== normalized);
+    const index = await getIndex();
+
+    delete index.domains[normalized];
+    for (const entry of Object.values(index.domains)) {
+      entry.iframeDomains = (entry.iframeDomains || []).filter((item) => item !== normalized);
+      entry.parentDomains = (entry.parentDomains || []).filter((item) => item !== normalized);
     }
-    await setState(state);
+
+    await browser.storage.local.set({ [INDEX_KEY]: index });
+    await browser.storage.local.remove(domainKey(normalized));
   });
 }
 
 export async function clearAll(): Promise<void> {
   await enqueueWrite(async () => {
-    await browser.storage.local.set({ [STATE_KEY]: EMPTY_STATE });
+    const everything = await browser.storage.local.get(null);
+    const keys = Object.keys(everything).filter(isStashDataKey);
+    if (keys.length) await browser.storage.local.remove(keys);
+    migrationPromise = Promise.resolve();
   });
 }
 
@@ -246,13 +308,82 @@ export function stripUrlQuery(url: string | undefined): string | undefined {
   }
 }
 
-async function getState(): Promise<StashState> {
-  const raw = await browser.storage.local.get(STATE_KEY);
-  return normalizeState(raw[STATE_KEY]);
+function domainKey(domain: string): string {
+  return `${DOMAIN_KEY_PREFIX}${domain}`;
 }
 
-async function setState(state: StashState): Promise<void> {
-  await browser.storage.local.set({ [STATE_KEY]: state });
+async function getIndex(): Promise<StashIndex> {
+  const raw = await browser.storage.local.get(INDEX_KEY);
+  return normalizeIndex(raw[INDEX_KEY]);
+}
+
+// Applies a mutated stored domain: drops the key and index entry when the
+// last field is gone, otherwise persists both in one write.
+async function writeStoredDomain(
+  domain: string,
+  stored: StoredDomain,
+  index: StashIndex,
+  refreshLastUpdated: boolean,
+): Promise<void> {
+  const key = domainKey(domain);
+
+  if (Object.keys(stored.fields).length === 0) {
+    delete index.domains[domain];
+    await browser.storage.local.set({ [INDEX_KEY]: index });
+    await browser.storage.local.remove(key);
+    return;
+  }
+
+  const previous = index.domains[domain];
+  const summary = summarizeStored(stored, previous?.iframeDomains || [], previous?.parentDomains || []);
+  if (!refreshLastUpdated && previous) summary.lastUpdated = previous.lastUpdated;
+  index.domains[domain] = summary;
+
+  await browser.storage.local.set({ [key]: stored, [INDEX_KEY]: index });
+}
+
+export function migrateIfNeeded(): Promise<void> {
+  migrationPromise ||= migrateLegacyState().catch((error) => {
+    migrationPromise = undefined;
+    throw error;
+  });
+  return migrationPromise;
+}
+
+async function migrateLegacyState(): Promise<void> {
+  const raw = await browser.storage.local.get([LEGACY_STATE_KEY, INDEX_KEY]);
+  const legacy = raw[LEGACY_STATE_KEY] as Partial<StashState> | undefined;
+  if (!legacy?.domains || typeof legacy.domains !== 'object') return;
+
+  const index = normalizeIndex(raw[INDEX_KEY]);
+  const payload: Record<string, unknown> = {};
+
+  for (const [rawDomain, domainData] of Object.entries(legacy.domains)) {
+    if (!domainData || typeof domainData !== 'object') continue;
+    const domain = normalizeDomain(rawDomain) || rawDomain;
+    const existing = index.domains[domain];
+    // A v2 entry can already exist if a previous migration attempt was
+    // interrupted after writing; never overwrite newer v2 data with v1 data.
+    if (existing && existing.lastUpdated >= (domainData.lastUpdated || 0)) continue;
+
+    const stored: StoredDomain = {
+      domain,
+      faviconUrl: domainData.faviconUrl,
+      lastUpdated: domainData.lastUpdated || 0,
+      fields: domainData.fields || {},
+    };
+
+    if (Object.keys(stored.fields).length > 0) payload[domainKey(domain)] = stored;
+    index.domains[domain] = summarizeStored(
+      stored,
+      domainData.iframeDomains || [],
+      domainData.parentDomains || [],
+    );
+  }
+
+  payload[INDEX_KEY] = index;
+  await browser.storage.local.set(payload);
+  await browser.storage.local.remove(LEGACY_STATE_KEY);
 }
 
 async function enqueueWrite(operation: () => Promise<void>): Promise<void> {
@@ -282,30 +413,54 @@ function normalizeSettings(raw: unknown): InputStashSettings {
   };
 }
 
-function normalizeState(raw: unknown): StashState {
-  const state = raw as Partial<StashState> | undefined;
-  if (!state?.domains || typeof state.domains !== 'object') return { domains: {} };
-  return { domains: state.domains as Record<string, DomainHistory> };
+function normalizeIndex(raw: unknown): StashIndex {
+  const index = raw as Partial<StashIndex> | undefined;
+  if (!index?.domains || typeof index.domains !== 'object') return { domains: {} };
+  return { domains: index.domains as Record<string, DomainSummary> };
 }
 
-function ensureDomain(state: StashState, domain: string, timestamp: number): DomainHistory {
-  state.domains[domain] ||= {
+function normalizeStoredDomain(raw: unknown, domain: string): StoredDomain {
+  const stored = raw as Partial<StoredDomain> | undefined;
+  return {
     domain,
-    lastUpdated: timestamp,
-    iframeDomains: [],
-    parentDomains: [],
-    fields: {},
+    faviconUrl: stored?.faviconUrl,
+    lastUpdated: stored?.lastUpdated || 0,
+    fields: stored?.fields && typeof stored.fields === 'object' ? stored.fields : {},
   };
-  return state.domains[domain];
+}
+
+function normalizeSummary(entry: DomainSummary): DomainSummary {
+  return {
+    domain: entry.domain,
+    faviconUrl: entry.faviconUrl,
+    lastUpdated: entry.lastUpdated || 0,
+    fieldCount: entry.fieldCount || 0,
+    recordCount: entry.recordCount || 0,
+    iframeDomains: entry.iframeDomains || [],
+    parentDomains: entry.parentDomains || [],
+  };
+}
+
+function summarizeStored(stored: StoredDomain, iframeDomains: string[], parentDomains: string[]): DomainSummary {
+  const fields = Object.values(stored.fields);
+  return {
+    domain: stored.domain,
+    faviconUrl: stored.faviconUrl,
+    lastUpdated: stored.lastUpdated,
+    fieldCount: fields.length,
+    recordCount: fields.reduce((sum, field) => sum + field.records.length, 0),
+    iframeDomains,
+    parentDomains,
+  };
 }
 
 function ensureField(
-  domainData: DomainHistory,
+  stored: StoredDomain,
   snapshot: CaptureSnapshot,
   sender: { tab?: { title?: string; url?: string } } | undefined,
   timestamp: number,
 ): FieldHistory {
-  domainData.fields[snapshot.fieldKey] ||= {
+  stored.fields[snapshot.fieldKey] ||= {
     fieldKey: snapshot.fieldKey,
     elementId: snapshot.elementId,
     label: snapshot.label,
@@ -320,7 +475,7 @@ function ensureField(
     topTitle: sender?.tab?.title || snapshot.topTitle,
     records: [],
   };
-  return domainData.fields[snapshot.fieldKey];
+  return stored.fields[snapshot.fieldKey];
 }
 
 function createRecord(
@@ -350,8 +505,10 @@ function applyHistoryLimit(field: FieldHistory, historyLimit: number): void {
   field.records = field.records.slice(field.records.length - historyLimit);
 }
 
+// Frame relations live only in the index, so an iframe capture never has to
+// read or write the parent domain's (potentially large) record data.
 function updateFrameRelations(
-  state: StashState,
+  index: StashIndex,
   domain: string,
   topDomain: string,
   snapshot: CaptureSnapshot,
@@ -361,34 +518,33 @@ function updateFrameRelations(
     .map(normalizeDomain)
     .filter((item) => item && item !== domain);
 
+  if (!relatedDomains.length) return;
+
+  const child = ensureIndexEntry(index, domain, timestamp);
   for (const parentDomain of relatedDomains) {
-    const parent = ensureDomain(state, parentDomain, timestamp);
+    const parent = ensureIndexEntry(index, parentDomain, timestamp);
     parent.lastUpdated = Math.max(parent.lastUpdated, timestamp);
     parent.iframeDomains = uniqueSorted([...parent.iframeDomains, domain]);
-
-    const child = ensureDomain(state, domain, timestamp);
     child.parentDomains = uniqueSorted([...child.parentDomains, parentDomain]);
   }
 }
 
-function newestFieldTime(domainData: DomainHistory): number {
-  return Object.values(domainData.fields).reduce((latest, field) => Math.max(latest, field.lastUpdated), 0);
+function ensureIndexEntry(index: StashIndex, domain: string, timestamp: number): DomainSummary {
+  index.domains[domain] ||= {
+    domain,
+    lastUpdated: timestamp,
+    fieldCount: 0,
+    recordCount: 0,
+    iframeDomains: [],
+    parentDomains: [],
+  };
+  return index.domains[domain];
+}
+
+function newestFieldTime(stored: StoredDomain): number {
+  return Object.values(stored.fields).reduce((latest, field) => Math.max(latest, field.lastUpdated), 0);
 }
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))].sort();
-}
-
-function cloneDomain(domain: DomainHistory): DomainHistory {
-  return {
-    ...domain,
-    iframeDomains: [...domain.iframeDomains],
-    parentDomains: [...domain.parentDomains],
-    fields: Object.fromEntries(
-      Object.entries(domain.fields).map(([fieldKey, field]) => [
-        fieldKey,
-        { ...field, records: field.records.map((record) => ({ ...record })) },
-      ]),
-    ),
-  };
 }

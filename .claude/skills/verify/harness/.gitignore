@@ -1,0 +1,6 @@
+node_modules/
+browsers/
+result-*.json
+popup.png
+package.json
+package-lock.json
